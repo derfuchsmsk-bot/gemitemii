@@ -18,26 +18,33 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        logger.info("Starting up application...")
         webhook_url = settings.WEBHOOK_URL
         if webhook_url:
-            # Ensure /webhook suffix
             if not webhook_url.endswith("/webhook"):
                 webhook_url = f"{webhook_url.rstrip('/')}/webhook"
                 settings.WEBHOOK_URL = webhook_url
 
             logger.info(f"Setting webhook to {webhook_url}")
-            # Always set webhook on startup to be sure, and clear any old secret tokens
+            # Ensure bot and dp are ready
             await bot.set_webhook(
                 url=webhook_url,
                 drop_pending_updates=True,
                 secret_token=settings.TELEGRAM_SECRET
             )
+            logger.info("Webhook set successfully")
         else:
-            logger.warning("WEBHOOK_URL is not set.")
+            logger.warning("WEBHOOK_URL is not set. Bot will not receive updates.")
     except Exception as e:
-        logger.error(f"Startup error: {e}")
+        logger.error(f"Critical startup error: {e}", exc_info=True)
     
     yield
+    
+    try:
+        logger.info("Shutting down application...")
+        # Optional: await bot.delete_webhook()
+    except Exception as e:
+        logger.error(f"Shutdown error: {e}")
 
 app = FastAPI(lifespan=lifespan)
 
