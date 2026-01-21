@@ -34,12 +34,9 @@ async def image_mode_entry(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith("gen_set_"))
 async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
-    # Format: gen_set_ar_1:1 or gen_set_style_Name or gen_set_magic_on/off or gen_set_res_4K
+    # Format: gen_set_ar_1:1 or gen_set_style_photo or gen_set_magic_on/off or gen_set_res_4K
     try:
         parts = callback.data.split("_")
-        if len(parts) < 4:
-            await callback.answer("Ошибка данных кнопки")
-            return
             
         action = parts[2] # ar, style, magic, res
         value = parts[3]
@@ -57,17 +54,17 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
             update_user_setting(user_id, "resolution", value)
             
         # Refresh keyboard
-        settings = get_user_settings(user_id)
-        ar = settings.get("aspect_ratio", "1:1")
-        style = settings.get("style", "photo")
-        magic = settings.get("magic_prompt", True)
-        res = settings.get("resolution", "Standard")
+        user_settings = get_user_settings(user_id)
+        ar = user_settings.get("aspect_ratio", "1:1")
+        style = user_settings.get("style", "photo")
+        magic = user_settings.get("magic_prompt", True)
+        res = user_settings.get("resolution", "Standard")
         
         await callback.message.edit_reply_markup(
             reply_markup=get_generation_settings_keyboard(ar, style, magic, res)
         )
     except Exception as e:
-        logger.error(f"Settings callback error: {e}")
+        logger.error(f"Settings callback error: {e}", exc_info=True)
         
     await callback.answer()
 
