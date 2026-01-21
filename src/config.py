@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     # Google Cloud
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
     PROJECT_ID: str
-    REGION: str = "global"
+    REGION: str = os.getenv("REGION", "global")
     
     # App
     PORT: int = int(os.getenv("PORT", "8080"))

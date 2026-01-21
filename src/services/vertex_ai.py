@@ -26,7 +26,7 @@ class VertexAIService:
         
         vertexai.init(
             project=settings.PROJECT_ID, 
-            location="global" 
+            location=settings.REGION 
         )
         
         self.flash_model = GenerativeModel("gemini-3-flash-preview") 
