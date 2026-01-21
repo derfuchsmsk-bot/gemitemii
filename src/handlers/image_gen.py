@@ -64,7 +64,10 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
             reply_markup=get_generation_settings_keyboard(ar, style, magic, res)
         )
     except Exception as e:
-        logger.error(f"Settings callback error: {e}", exc_info=True)
+        if "message is not modified" in str(e).lower():
+            pass # Ignore if keyboard hasn't changed
+        else:
+            logger.error(f"Settings callback error: {e}", exc_info=True)
         
     await callback.answer()
 
