@@ -34,33 +34,37 @@ async def image_mode_entry(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("gen_set_"))
 async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
     # Format: gen_set_ar_1:1 or gen_set_style_Name or gen_set_magic_on/off
-    parts = callback.data.split("_")
-    action = parts[2] # ar, style, magic
-    value = parts[3]
-    
-    user_id = callback.from_user.id
-    
-    if action == "ar":
-        update_user_setting(user_id, "aspect_ratio", value)
-    elif action == "style":
-        update_user_setting(user_id, "style", value)
-    elif action == "magic":
-        # Value is 'on' or 'off'
-        is_on = (value == "on")
-        update_user_setting(user_id, "magic_prompt", is_on)
-        
-    # Refresh keyboard
-    settings = get_user_settings(user_id)
-    ar = settings.get("aspect_ratio", "1:1")
-    style = settings.get("style", "Фотореализм")
-    magic = settings.get("magic_prompt", True)
-    
     try:
+        parts = callback.data.split("_")
+        if len(parts) < 4:
+            await callback.answer("Ошибка данных кнопки")
+            return
+            
+        action = parts[2] # ar, style, magic
+        value = parts[3]
+        
+        user_id = callback.from_user.id
+        
+        if action == "ar":
+            update_user_setting(user_id, "aspect_ratio", value)
+        elif action == "style":
+            update_user_setting(user_id, "style", value)
+        elif action == "magic":
+            # Value is 'on' or 'off'
+            is_on = (value == "on")
+            update_user_setting(user_id, "magic_prompt", is_on)
+            
+        # Refresh keyboard
+        settings = get_user_settings(user_id)
+        ar = settings.get("aspect_ratio", "1:1")
+        style = settings.get("style", "Фотореализм")
+        magic = settings.get("magic_prompt", True)
+        
         await callback.message.edit_reply_markup(
             reply_markup=get_generation_settings_keyboard(ar, style, magic)
         )
-    except Exception:
-        pass 
+    except Exception as e:
+        logger.error(f"Settings callback error: {e}")
         
     await callback.answer()
 
@@ -75,7 +79,8 @@ async def process_image_prompt(message: Message, state: FSMContext):
     style = user_settings.get("style", "Фотореализм")
     magic_prompt = user_settings.get("magic_prompt", True)
     
-    msg = await message.answer(f"🎨 Генерирую изображение...\n(AR: {aspect_ratio}, Style: {style}, Magic: {'ON' if magic_prompt else 'OFF'})")
+    magic_status = "ON" if magic_prompt else "OFF"
+    msg = await message.answer(f"🎨 Генерирую... (AR: {aspect_ratio}, Style: {style}, Magic: {magic_status})")
     
     try:
         # Decide prompt logic based on Magic setting
@@ -125,7 +130,12 @@ async def process_image_prompt(message: Message, state: FSMContext):
         
     except Exception as e:
         logger.error(f"Image generation failed: {e}")
-        await msg.edit_text(f"❌ Ошибка: {str(e)}")
+        try:
+            await msg.edit_text(f"❌ Ошибка: {str(e)}")
+        except Exception:
+            # If we can't edit the message (e.g. it was deleted), just log it
+            # and DO NOT raise exception, otherwise Telegram will retry endlessly
+            logger.error("Could not send error message to user.")
 
 @router.callback_query(F.data == "img_download")
 async def download_image(callback: CallbackQuery, state: FSMContext):
@@ -156,26 +166,14 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
     
     await callback.answer("🔄 Генерирую заново...")
     
-    # Create a fake message object with the original text to reuse process_image_prompt logic
-    # This ensures it uses CURRENT settings (AR, Magic, etc.) which might have been changed by user
-    # Or, if we want to repeat EXACT settings, we should have saved them in state.
-    # Usually "Regenerate" means "Try again with same inputs".
-    
-    # Reuse logic via function call
-    # We need to Mock message object
-    from aiogram.types import User, Chat
-    
-    # Better way: Refactor process_image_prompt to separate logic, but for now lets just call it
-    # We need to construct a message-like object
-    
-    # Actually, simpler: just call the logic code directly here
     user_id = callback.from_user.id
     user_settings = get_user_settings(user_id)
     aspect_ratio = user_settings.get("aspect_ratio", "1:1")
     style = user_settings.get("style", "Фотореализм")
     magic_prompt = user_settings.get("magic_prompt", True)
     
-    msg = await callback.message.answer(f"🎨 Вариант 2...\n(AR: {aspect_ratio}, Style: {style}, Magic: {'ON' if magic_prompt else 'OFF'})")
+    magic_status = "ON" if magic_prompt else "OFF"
+    msg = await callback.message.answer(f"🎨 Вариант 2...\n(AR: {aspect_ratio}, Style: {style}, Magic: {magic_status})")
     
     try:
         if magic_prompt:
@@ -212,5 +210,8 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
             await state.update_data(last_image_id=file_id) # Update ID for download button
             
     except Exception as e:
-        await msg.edit_text(f"❌ Ошибка: {str(e)}")
-ж
+        logger.error(f"Regeneration failed: {e}")
+        try:
+            await msg.edit_text(f"❌ Ошибка: {str(e)}")
+        except:
+            pass
