@@ -27,26 +27,31 @@ dp.include_router(chat.router)
 
 @app.on_event("startup")
 async def on_startup():
-    webhook_url = settings.WEBHOOK_URL
-    if not webhook_url:
-        logger.warning("WEBHOOK_URL is not set.")
-        return
+    try:
+        webhook_url = settings.WEBHOOK_URL
+        if not webhook_url:
+            logger.warning("WEBHOOK_URL is not set.")
+            return
 
-    webhook_info = await bot.get_webhook_info()
-    
-    # Ensure /webhook suffix
-    if not webhook_url.endswith("/webhook"):
-        webhook_url = f"{webhook_url.rstrip('/')}/webhook"
-        settings.WEBHOOK_URL = webhook_url
+        webhook_info = await bot.get_webhook_info()
+        
+        # Ensure /webhook suffix
+        if not webhook_url.endswith("/webhook"):
+            webhook_url = f"{webhook_url.rstrip('/')}/webhook"
+            settings.WEBHOOK_URL = webhook_url
 
-    if webhook_info.url != webhook_url or settings.TELEGRAM_SECRET_TOKEN:
-        logger.info(f"Setting webhook to {webhook_url}")
-        await bot.set_webhook(
-            url=webhook_url,
-            secret_token=settings.TELEGRAM_SECRET_TOKEN
-        )
-    else:
-        logger.info("Webhook already set correctly.")
+        if webhook_info.url != webhook_url or settings.TELEGRAM_SECRET_TOKEN:
+            logger.info(f"Setting webhook to {webhook_url}")
+            await bot.set_webhook(
+                url=webhook_url,
+                secret_token=settings.TELEGRAM_SECRET_TOKEN
+            )
+        else:
+            logger.info("Webhook already set correctly.")
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+        # In Cloud Run, we might want to continue even if webhook fails
+        # to let the container start and listen on port
 
 @app.post("/webhook")
 async def webhook(
@@ -75,4 +80,5 @@ async def health_check():
         return {"status": "unhealthy", "error": str(e)}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
