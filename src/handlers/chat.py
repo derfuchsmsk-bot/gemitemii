@@ -1,0 +1,38 @@
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery
+from src.services.vertex_ai import vertex_service
+from src.keyboards.settings_kbs import get_chat_response_keyboard
+
+router = Router()
+
+# State handling could be added here
+CONTEXT = {}
+
+@router.message(F.text == "🔘 Чат (Gemini)")
+async def chat_mode_entry(message: Message):
+    await message.answer("💬 Режим чата активирован. Пиши любой вопрос!")
+
+@router.message(F.text & ~F.text.startswith("/"))
+async def chat_handler(message: Message):
+    # Check if user is in chat mode or other modes via state (omitted for simplicity)
+    user_id = message.from_user.id
+    history = CONTEXT.get(user_id, [])
+    
+    msg = await message.answer("⏳ Думаю...")
+    
+    try:
+        response = await vertex_service.generate_text(message.text, history=history)
+        
+        # Update history (simplified)
+        # In production use proper history management compatible with Gemini SDK
+        
+        await msg.edit_text(response, reply_markup=get_chat_response_keyboard())
+    except Exception as e:
+        await msg.edit_text(f"❌ Ошибка: {str(e)}")
+
+@router.callback_query(F.data == "chat_clear")
+async def clear_context(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    CONTEXT[user_id] = []
+    await callback.message.answer("🗑 Контекст очищен!")
+    await callback.answer()
