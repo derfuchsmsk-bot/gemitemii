@@ -31,9 +31,9 @@ def get_generation_settings_keyboard(current_ar: str, current_style: str, magic_
 
     # Row 4: Styles
     builder.row(
-        InlineKeyboardButton(text=f"{'✅ ' if current_style == 'Фотореализм' else ''}Фото", callback_data="gen_set_style_Фотореализм"),
-        InlineKeyboardButton(text=f"{'✅ ' if current_style == 'Аниме/Арт' else ''}Арт", callback_data="gen_set_style_Аниме/Арт"),
-        InlineKeyboardButton(text=f"{'✅ ' if current_style == 'Без стиля' else ''}Нет", callback_data="gen_set_style_Без стиля")
+        InlineKeyboardButton(text=f"{'✅ ' if current_style == 'photo' else ''}Фото", callback_data="gen_set_style_photo"),
+        InlineKeyboardButton(text=f"{'✅ ' if current_style == 'art' else ''}Арт", callback_data="gen_set_style_art"),
+        InlineKeyboardButton(text=f"{'✅ ' if current_style == 'none' else ''}Нет", callback_data="gen_set_style_none")
     )
     
     return builder.as_markup()

@@ -16,6 +16,10 @@ async def settings_menu(message: Message):
     )
     await message.answer(text, reply_markup=get_settings_keyboard())
 
+@router.callback_query(F.data == "settings_model")
+async def settings_model_callback(callback: CallbackQuery):
+    await callback.answer("В данной версии доступна только модель Gemini Flash", show_alert=True)
+
 @router.callback_query(F.data.startswith("set_"))
 async def setting_callback(callback: CallbackQuery):
     # data format: set_action_value

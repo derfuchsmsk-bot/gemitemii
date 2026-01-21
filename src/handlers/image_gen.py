@@ -19,7 +19,7 @@ async def image_mode_entry(message: Message, state: FSMContext):
     user_id = message.from_user.id
     settings = get_user_settings(user_id)
     ar = settings.get("aspect_ratio", "1:1")
-    style = settings.get("style", "Фотореализм")
+    style = settings.get("style", "photo")
     magic = settings.get("magic_prompt", True)
     res = settings.get("resolution", "Standard")
     
@@ -59,7 +59,7 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
         # Refresh keyboard
         settings = get_user_settings(user_id)
         ar = settings.get("aspect_ratio", "1:1")
-        style = settings.get("style", "Фотореализм")
+        style = settings.get("style", "photo")
         magic = settings.get("magic_prompt", True)
         res = settings.get("resolution", "Standard")
         
@@ -79,7 +79,7 @@ async def process_image_prompt(message: Message, state: FSMContext):
     # Get user settings
     user_settings = get_user_settings(user_id)
     aspect_ratio = user_settings.get("aspect_ratio", "1:1")
-    style = user_settings.get("style", "Фотореализм")
+    style = user_settings.get("style", "photo")
     magic_prompt = user_settings.get("magic_prompt", True)
     resolution = user_settings.get("resolution", "Standard")
     
@@ -138,9 +138,9 @@ async def process_image_prompt(message: Message, state: FSMContext):
             logger.error("No photo found in result message")
         
     except Exception as e:
-        logger.error(f"Image generation failed: {e}")
+        logger.error(f"Image generation failed: {e}", exc_info=True)
         try:
-            await msg.edit_text(f"❌ Ошибка: {str(e)}")
+            await msg.edit_text("❌ Извините, произошла ошибка при генерации изображения. Попробуйте другой запрос.")
         except Exception:
             # If we can't edit the message (e.g. it was deleted), just log it
             # and DO NOT raise exception, otherwise Telegram will retry endlessly
@@ -164,6 +164,57 @@ async def download_image(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Failed to send document: {e}")
         await callback.answer("❌ Ошибка отправки файла", show_alert=True)
 
+@router.callback_query(F.data == "img_edit")
+async def start_image_edit(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(GenStates.edit_wait)
+    await callback.message.answer(
+        "✏️ **Режим редактирования**\n\n"
+        "Опишите, что вы хотите изменить в этом изображении.\n"
+        "Например: 'Сделай небо красным' или 'Добавь кота на стул'."
+    )
+    await callback.answer()
+
+@router.message(GenStates.edit_wait)
+async def process_image_edit(message: Message, state: FSMContext):
+    data = await state.get_data()
+    file_id = data.get("last_image_id")
+    edit_prompt = message.text
+
+    if not file_id:
+        await message.answer("⚠️ Исходное изображение не найдено. Начните новую генерацию.")
+        await state.set_state(GenStates.prompt_wait)
+        return
+
+    msg = await message.answer("🎨 Редактирую изображение...")
+
+    try:
+        # Download file from Telegram
+        bot = message.bot
+        file = await bot.get_file(file_id)
+        image_io = await bot.download_file(file.file_path)
+        image_bytes = image_io.read()
+
+        # Call Vertex AI
+        edited_image_bytes = await vertex_service.edit_image(image_bytes, edit_prompt)
+        
+        photo_file = BufferedInputFile(edited_image_bytes, filename="edited_image.png")
+        
+        await msg.delete()
+        result_msg = await message.answer_photo(
+            photo=photo_file,
+            caption=f"✨ Отредактировано: {edit_prompt}",
+            reply_markup=get_image_response_keyboard()
+        )
+        
+        if result_msg.photo:
+            await state.update_data(last_image_id=result_msg.photo[-1].file_id)
+            
+    except Exception as e:
+        logger.error(f"Image edit failed: {e}", exc_info=True)
+        await msg.edit_text("❌ Извините, произошла ошибка при редактировании изображения.")
+    
+    await state.set_state(GenStates.prompt_wait)
+
 @router.callback_query(F.data == "img_regenerate")
 async def regenerate_image(callback: CallbackQuery, state: FSMContext):
     data = await state.get_data()
@@ -178,7 +229,7 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     user_settings = get_user_settings(user_id)
     aspect_ratio = user_settings.get("aspect_ratio", "1:1")
-    style = user_settings.get("style", "Фотореализм")
+    style = user_settings.get("style", "photo")
     magic_prompt = user_settings.get("magic_prompt", True)
     
     magic_status = "ON" if magic_prompt else "OFF"
@@ -219,8 +270,8 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
             await state.update_data(last_image_id=file_id) # Update ID for download button
             
     except Exception as e:
-        logger.error(f"Regeneration failed: {e}")
+        logger.error(f"Regeneration failed: {e}", exc_info=True)
         try:
-            await msg.edit_text(f"❌ Ошибка: {str(e)}")
+            await msg.edit_text("❌ Извините, произошла ошибка при повторной генерации.")
         except:
             pass

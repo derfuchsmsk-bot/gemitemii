@@ -3,6 +3,7 @@ fastapi
 uvicorn
 google-cloud-aiplatform
 google-cloud-storage
+google-cloud-firestore
 python-dotenv
 pydantic
 pydantic-settings

@@ -59,7 +59,8 @@ class VertexAIService:
         
         async def _call():
             chat = model.start_chat(history=history or [])
-            response = await chat.send_message_async(prompt)
+            # Set a timeout for the response
+            response = await asyncio.wait_for(chat.send_message_async(prompt), timeout=60.0)
             return response.text
 
         return await self._retry_request(_call)
@@ -73,7 +74,8 @@ class VertexAIService:
         )
         
         async def _call():
-            response = await self.image_model.generate_content_async(full_prompt)
+            # Set a timeout for image generation
+            response = await asyncio.wait_for(self.image_model.generate_content_async(full_prompt), timeout=90.0)
             
             image_bytes = None
             text_response = ""
@@ -100,7 +102,10 @@ class VertexAIService:
         image_part = Part.from_data(data=image_bytes, mime_type="image/png")
         
         async def _call():
-            response = await self.image_model.generate_content_async([prompt, image_part])
+            response = await asyncio.wait_for(
+                self.image_model.generate_content_async([prompt, image_part]),
+                timeout=90.0
+            )
             for part in response.candidates[0].content.parts:
                 if hasattr(part, 'inline_data') and part.inline_data:
                     return part.inline_data.data
