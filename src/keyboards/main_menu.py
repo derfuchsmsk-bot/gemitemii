@@ -3,11 +3,14 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 def get_main_keyboard() -> ReplyKeyboardMarkup:
     kb = [
         [
-            KeyboardButton(text="🔘 Чат (Gemini)"),
-            KeyboardButton(text="🎨 Nano Banana Pro")
+            KeyboardButton(text="💬 Чат"),
+            KeyboardButton(text="🎨 Текст в фото")
         ],
         [
-            KeyboardButton(text="⚙️ Настройки"),
+            KeyboardButton(text="🖼 Фото в фото"),
+            KeyboardButton(text="⚙️ Настройки")
+        ],
+        [
             KeyboardButton(text="❓ Помощь")
         ]
     ]

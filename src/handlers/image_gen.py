@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-@router.message(F.text == "🎨 Nano Banana Pro")
+@router.message(F.text.in_({"🎨 Nano Banana Pro", "🎨 Текст в фото"}))
 async def image_mode_entry(message: Message, state: FSMContext):
     await state.set_state(GenStates.prompt_wait)
     
@@ -25,13 +25,20 @@ async def image_mode_entry(message: Message, state: FSMContext):
     res = settings.get("resolution", "Standard")
     
     text = (
-        "🎨 Режим Nano Banana Pro\n\n"
-        "Введите описание картинки, которую хотите создать.\n"
-        "Вы можете изменить параметры генерации кнопками ниже перед отправкой текста 👇"
+        "🎨 Режим генерации изображений\n\n"
+        "Введите описание картинки текстом.\n"
+        "Вы можете изменить параметры кнопками ниже 👇"
     )
     
     await message.answer(text, reply_markup=get_generation_settings_keyboard(ar, style, magic, res))
-    logger.info(f"User {user_id} entered image generation mode")
+
+@router.message(F.text == "🖼 Фото в фото")
+async def img2img_mode_entry(message: Message, state: FSMContext):
+    await state.set_state(GenStates.prompt_wait)
+    await message.answer(
+        "🖼 Режим Фото в фото\n\n"
+        "Отправьте изображение (фото или файл), которое хотите изменить."
+    )
 
 @router.callback_query(F.data.startswith("gen_set_"))
 async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):

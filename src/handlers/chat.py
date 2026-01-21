@@ -3,6 +3,7 @@ from aiogram.types import Message, CallbackQuery
 from src.services.vertex_ai import vertex_service
 from src.keyboards.settings_kbs import get_chat_response_keyboard
 from src.settings_store import db
+from vertexai.generative_models import Content, Part
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ def get_context_ref(user_id: int):
         return db.collection("chat_contexts").document(str(user_id))
     return None
 
-@router.message(F.text == "🔘 Чат (Gemini)")
+@router.message(F.text.in_({"🔘 Чат (Gemini)", "💬 Чат"}))
 async def chat_mode_entry(message: Message):
     await message.answer("💬 Режим чата активирован. Пиши любой вопрос!")
 
@@ -22,12 +23,22 @@ async def chat_mode_entry(message: Message):
 async def chat_handler(message: Message):
     user_id = message.from_user.id
     history = []
+    raw_history = []
     
     ref = get_context_ref(user_id)
     if ref:
         doc = ref.get()
         if doc.exists:
-            history = doc.to_dict().get("history", [])
+            raw_history = doc.to_dict().get("history", [])
+            # Convert raw dicts to Content objects for Vertex AI
+            try:
+                history = [
+                    Content(role=h["role"], parts=[Part.from_text(str(p)) for p in h["parts"]])
+                    for h in raw_history
+                ]
+            except Exception as e:
+                logger.error(f"History conversion error: {e}")
+                history = []
     
     msg = await message.answer("⏳ Думаю...")
     
@@ -35,10 +46,10 @@ async def chat_handler(message: Message):
         response = await vertex_service.generate_text(message.text, history=history)
         
         if ref:
-            history.append({"role": "user", "parts": [message.text]})
-            history.append({"role": "model", "parts": [response]})
+            raw_history.append({"role": "user", "parts": [message.text]})
+            raw_history.append({"role": "model", "parts": [response]})
             # Keep last 10 messages (5 turns)
-            ref.set({"history": history[-10:]})
+            ref.set({"history": raw_history[-10:]})
         
         await msg.edit_text(response, reply_markup=get_chat_response_keyboard())
     except Exception as e:
