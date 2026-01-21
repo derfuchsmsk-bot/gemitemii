@@ -1,6 +1,6 @@
 import logging
 import uvicorn
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, BackgroundTasks
 from aiogram import Bot, Dispatcher, types
 from src.config import settings
 from src.handlers import common, chat, image_gen, settings as settings_handler
@@ -52,9 +52,9 @@ async def on_startup():
         logger.error(f"Startup error: {e}")
 
 @app.post("/webhook")
-async def webhook(update: dict):
+async def webhook(update: dict, background_tasks: BackgroundTasks):
     telegram_update = types.Update(**update)
-    await dp.feed_update(bot, telegram_update)
+    background_tasks.add_task(dp.feed_update, bot, telegram_update)
     return {"ok": True}
 
 @app.get("/")

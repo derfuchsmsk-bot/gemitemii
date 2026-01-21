@@ -59,8 +59,8 @@ class VertexAIService:
         
         async def _call():
             chat = model.start_chat(history=history or [])
-            # Set a timeout for the response
-            response = await asyncio.wait_for(chat.send_message_async(prompt), timeout=60.0)
+            # Increased timeout for text generation as well
+            response = await asyncio.wait_for(chat.send_message_async(prompt), timeout=120.0)
             return response.text
 
         return await self._retry_request(_call)
@@ -74,8 +74,8 @@ class VertexAIService:
         )
         
         async def _call():
-            # Set a timeout for image generation
-            response = await asyncio.wait_for(self.image_model.generate_content_async(full_prompt), timeout=90.0)
+            # Increase timeout for Gemini 3 Image generation
+            response = await asyncio.wait_for(self.image_model.generate_content_async(full_prompt), timeout=180.0)
             
             image_bytes = None
             text_response = ""
