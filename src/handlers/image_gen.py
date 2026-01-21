@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 from src.services.vertex_ai import vertex_service
 from src.keyboards.settings_kbs import get_image_response_keyboard
@@ -18,16 +18,19 @@ async def process_image_prompt(message: Message, state: FSMContext):
     msg = await message.answer("🎨 Генерирую изображение...")
     
     try:
-        # In a real app, you would pass style/aspect ratio from user settings (stored in DB/Redis)
-        image_url = await vertex_service.generate_image(prompt)
+        # Returns bytes now
+        image_bytes = await vertex_service.generate_image(prompt)
+        
+        # Create input file from bytes
+        photo_file = BufferedInputFile(image_bytes, filename="image.png")
         
         await msg.delete()
         await message.answer_photo(
-            photo=image_url,
+            photo=photo_file,
             caption=f"✨ {prompt}",
             reply_markup=get_image_response_keyboard()
         )
-        await state.clear() # Or keep state if you want subsequent messages to be treated as refinements
+        await state.clear()
     except Exception as e:
         await msg.edit_text(f"❌ Ошибка генерации: {str(e)}")
         await state.clear()

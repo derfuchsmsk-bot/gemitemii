@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Telegram
     BOT_TOKEN: str
-    WEBHOOK_URL: str = ""
+    WEBHOOK_URL: str | None = None
     
     # Google Cloud
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
