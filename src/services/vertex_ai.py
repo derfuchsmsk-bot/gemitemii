@@ -21,29 +21,42 @@ class VertexAIService:
         response = await chat.send_message_async(prompt)
         return response.text
 
-    async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> bytes:
+    async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> tuple[bytes, str]:
         # Generate image using Gemini 3 Pro Image
         # Output is "Text and image"
         
-        # Add aspect ratio instructions to prompt
-        # While the API documentation mentions Aspect Ratio, typically for LLMs it's part of the prompt or a specific param if supported.
-        # Since I can't pass config params directly to generate_content yet for image specific configs easily without tools config,
-        # I'll rely on prompt following which Gemini 3 is excellent at.
-        
-        # Map aspect ratio short codes to descriptive text if needed, or pass as is.
-        full_prompt = f"{prompt}\n\nTechnical details: Aspect Ratio {aspect_ratio}"
+        full_prompt = (
+            f"User request: '{prompt}'. "
+            f"Aspect Ratio: {aspect_ratio}. "
+            f"Action: 1. Create a detailed prompt in English for this image. 2. GENERATE the image."
+        )
         
         response = await self.image_model.generate_content_async(full_prompt)
         
-        # Extract image from response parts
-        # Gemini usually returns parts. We need to find the one with inline_data (image)
-        for part in response.candidates[0].content.parts:
-            # Check for inline data (image bytes)
-            if hasattr(part, 'inline_data') and part.inline_data:
-                 return part.inline_data.data
+        image_bytes = None
+        text_response = ""
+
+        # Parse response parts
+        # Gemini usually returns a list of parts (Text, Image, etc.)
+        if response.candidates and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                # Check if part has text attribute
+                # In vertexai SDK, part can be accessed via .text if it's a text part
+                try:
+                    if part.text:
+                        text_response += part.text + "\n"
+                except:
+                    pass
+                
+                # Check for inline data (image)
+                if hasattr(part, 'inline_data') and part.inline_data:
+                     image_bytes = part.inline_data.data
+
+        if not image_bytes:
+            # Fallback: sometimes model refuses to generate image but gives text reason
+            raise ValueError(f"No image generated. Model said: {text_response}")
             
-        # If no image found, raise error
-        raise ValueError("No image generated in response. The model might have refused or returned only text.")
+        return image_bytes, text_response.strip()
 
     async def edit_image(self, image_bytes: bytes, prompt: str) -> bytes:
         # Edit image using Gemini 3 Pro Image

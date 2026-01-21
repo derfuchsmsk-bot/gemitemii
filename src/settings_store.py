@@ -5,7 +5,8 @@ USER_SETTINGS = {}
 
 DEFAULT_SETTINGS = {
     "aspect_ratio": "1:1",
-    "style": "Фотореализм"
+    "style": "Фотореализм",
+    "magic_prompt": True # Enabled by default
 }
 
 def get_user_settings(user_id: int) -> dict:
