@@ -163,18 +163,28 @@ async def download_image(callback: CallbackQuery, state: FSMContext):
         data = await state.get_data()
         file_id = data.get("last_image_id")
     
-    logger.info(f"Attempting to download file_id: {file_id}")
-    
     if not file_id:
         await callback.answer("⚠️ Файл не найден. Сгенерируйте заново.", show_alert=True)
         return
 
+    await callback.answer("⏳ Подготавливаю файл...")
+
     try:
-        await callback.message.answer_document(document=file_id, caption="📥 Ваш файл")
-        await callback.answer()
+        # Download file from Telegram servers
+        bot = callback.bot
+        file = await bot.get_file(file_id)
+        image_io = await bot.download_file(file.file_path)
+        
+        # Send it back as a document (uncompressed)
+        document_file = BufferedInputFile(image_io.read(), filename="generated_image.png")
+        
+        await callback.message.answer_document(
+            document=document_file, 
+            caption="📥 Ваше изображение в исходном качестве"
+        )
     except Exception as e:
-        logger.error(f"Failed to send document: {e}")
-        await callback.answer("❌ Ошибка отправки файла", show_alert=True)
+        logger.error(f"Failed to download/re-upload file: {e}")
+        await callback.answer("❌ Ошибка при подготовке файла", show_alert=True)
 
 @router.callback_query(F.data == "img_edit")
 async def start_image_edit(callback: CallbackQuery, state: FSMContext):
