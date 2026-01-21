@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram ter, F
 from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 from src.services.vertex_ai import vertex_service
@@ -242,6 +242,9 @@ async def process_image_edit(message: Message, state: FSMContext):
         # Call Vertex AI
         edited_image_bytes = await vertex_service.edit_image(image_bytes, edit_prompt)
         
+        # Save edited version to GCS
+        new_gcs_file = await vertex_service.upload_to_gcs(edited_image_bytes)
+        
         photo_file = BufferedInputFile(edited_image_bytes, filename="edited_image.png")
         
         await msg.delete()
@@ -252,7 +255,10 @@ async def process_image_edit(message: Message, state: FSMContext):
         )
         
         if result_msg.photo:
-            await state.update_data(last_image_id=result_msg.photo[-1].file_id)
+            await state.update_data(
+                last_image_id=result_msg.photo[-1].file_id,
+                gcs_file_name=new_gcs_file
+            )
             
     except Exception as e:
         logger.error(f"Image edit failed: {e}", exc_info=True)
@@ -306,6 +312,10 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
             )
 
         image_bytes, model_text = await vertex_service.generate_image(full_user_prompt, aspect_ratio=aspect_ratio)
+        
+        # Save to GCS
+        new_gcs_file = await vertex_service.upload_to_gcs(image_bytes)
+        
         photo_file = BufferedInputFile(image_bytes, filename="image.png")
         
         await msg.delete()
@@ -321,7 +331,10 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
         
         if result_msg.photo:
             file_id = result_msg.photo[-1].file_id
-            await state.update_data(last_image_id=file_id) # Update ID for download button
+            await state.update_data(
+                last_image_id=file_id,
+                gcs_file_name=new_gcs_file
+            )
             
     except Exception as e:
         logger.error(f"Regeneration failed: {e}", exc_info=True)

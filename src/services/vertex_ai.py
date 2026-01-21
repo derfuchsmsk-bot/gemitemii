@@ -10,8 +10,6 @@ logger = logging.getLogger(__name__)
 from google.cloud import storage
 import uuid
 
-// ... existing code ...
-
 class VertexAIService:
     def __init__(self):
         vertexai.init(
@@ -26,13 +24,18 @@ class VertexAIService:
         # Initialize GCS client
         try:
             self.storage_client = storage.Client(project=settings.PROJECT_ID)
+            logger.info(f"GCS client initialized successfully for project {settings.PROJECT_ID}")
         except Exception as e:
             logger.error(f"Failed to initialize GCS client: {e}")
             self.storage_client = None
 
     async def upload_to_gcs(self, image_bytes: bytes) -> str:
         """Uploads image to GCS and returns the file name (UUID)"""
-        if not self.storage_client or not settings.GCS_BUCKET_NAME:
+        if not self.storage_client:
+            logger.warning("GCS Upload skipped: Storage client not initialized")
+            return None
+        if not settings.GCS_BUCKET_NAME:
+            logger.warning("GCS Upload skipped: GCS_BUCKET_NAME not set")
             return None
             
         try:
@@ -40,25 +43,32 @@ class VertexAIService:
             file_name = f"{uuid.uuid4()}.png"
             blob = bucket.blob(file_name)
             
+            logger.info(f"Uploading {len(image_bytes)} bytes to GCS bucket {settings.GCS_BUCKET_NAME} as {file_name}")
+            
             # Use run_in_executor for synchronous GCS library
             await asyncio.to_thread(blob.upload_from_string, image_bytes, content_type="image/png")
             
+            logger.info("GCS Upload successful")
             return file_name
         except Exception as e:
-            logger.error(f"GCS Upload failed: {e}")
+            logger.error(f"GCS Upload failed: {e}", exc_info=True)
             return None
 
     async def download_from_gcs(self, file_name: str) -> bytes:
         """Downloads image from GCS"""
         if not self.storage_client or not settings.GCS_BUCKET_NAME:
+            logger.warning("GCS Download skipped: client or bucket not set")
             return None
             
         try:
+            logger.info(f"Downloading {file_name} from GCS bucket {settings.GCS_BUCKET_NAME}")
             bucket = self.storage_client.bucket(settings.GCS_BUCKET_NAME)
             blob = bucket.blob(file_name)
-            return await asyncio.to_thread(blob.download_as_bytes)
+            data = await asyncio.to_thread(blob.download_as_bytes)
+            logger.info(f"Downloaded {len(data)} bytes from GCS")
+            return data
         except Exception as e:
-            logger.error(f"GCS Download failed: {e}")
+            logger.error(f"GCS Download failed for {file_name}: {e}", exc_info=True)
             return None
 
     async def _retry_request(self, func, *args, **kwargs):
