@@ -37,25 +37,19 @@ async def on_startup():
             logger.warning("WEBHOOK_URL is not set.")
             return
 
-        webhook_info = await bot.get_webhook_info()
-        
         # Ensure /webhook suffix
         if not webhook_url.endswith("/webhook"):
             webhook_url = f"{webhook_url.rstrip('/')}/webhook"
             settings.WEBHOOK_URL = webhook_url
 
-        if webhook_info.url != webhook_url:
-            logger.info(f"Setting webhook to {webhook_url}")
-            await bot.set_webhook(
-                url=webhook_url,
-                drop_pending_updates=True
-            )
-        else:
-            logger.info("Webhook already set correctly.")
+        logger.info(f"Setting webhook to {webhook_url}")
+        # Always set webhook on startup to be sure, and clear any old secret tokens
+        await bot.set_webhook(
+            url=webhook_url,
+            drop_pending_updates=True
+        )
     except Exception as e:
         logger.error(f"Startup error: {e}")
-        # In Cloud Run, we might want to continue even if webhook fails
-        # to let the container start and listen on port
 
 @app.post("/webhook")
 async def webhook(update: dict):
