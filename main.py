@@ -50,9 +50,9 @@ dp.message.middleware(RateLimitMiddleware(limit=1.0))
 
 # Include routers
 dp.include_router(common.router)
+dp.include_router(image_gen.router) # Moved UP
 dp.include_router(settings_handler.router)
-dp.include_router(image_gen.router)
-dp.include_router(chat.router)
+dp.include_router(chat.router) # Moved DOWN
 
 @app.post("/webhook")
 async def webhook(

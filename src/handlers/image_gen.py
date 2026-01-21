@@ -81,6 +81,89 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
         
     await callback.answer()
 
+@router.message(GenStates.prompt_wait, F.text)
+async def process_image_prompt(message: Message, state: FSMContext):
+    user_prompt = message.text
+    user_id = message.from_user.id
+    
+    # Get user settings
+    user_settings = get_user_settings(user_id)
+    aspect_ratio = user_settings.get("aspect_ratio", "1:1")
+    style = user_settings.get("style", "photo")
+    magic_prompt = user_settings.get("magic_prompt", True)
+    resolution = user_settings.get("resolution", "Standard")
+    
+    magic_status = "ON" if magic_prompt else "OFF"
+    msg = await message.answer(f"🎨 Генерирую... (AR: {aspect_ratio}, Style: {style}, Magic: {magic_status}, Res: {resolution})")
+    
+    try:
+        # Construct prompt suffix based on resolution
+        res_prompt = ""
+        if resolution == "HD":
+            res_prompt = "High definition, sharp details."
+        elif resolution == "4K":
+            res_prompt = "4k resolution, 8k textures, highly detailed, ultra-sharp focus."
+
+        if magic_prompt:
+            full_user_prompt = (
+                f"User request: '{user_prompt}'. "
+                f"Desired Style: {style}. {res_prompt} "
+                f"Aspect Ratio: {aspect_ratio}. "
+                f"Action: GENERATE the image. "
+                f"TEXT RESPONSE INSTRUCTIONS: Provide an enhanced, detailed version of the user request in English. "
+                f"CRITICAL: Respond ONLY with plain text description. "
+                f"NEVER use JSON format, NEVER mention tools like 'dalle', and NEVER provide internal thoughts."
+            )
+        else:
+            full_user_prompt = (
+                f"User request: '{user_prompt}'. "
+                f"Style: {style}. {res_prompt} "
+                f"Aspect Ratio: {aspect_ratio}. "
+                f"Action: GENERATE the image exactly as described. Do not embellish. "
+                f"In your text response, provide ONLY a very brief, one-sentence description of the image in Russian."
+            )
+        
+        # Single call to Gemini 3 Image
+        image_bytes, model_text = await vertex_service.generate_image(full_user_prompt, aspect_ratio=aspect_ratio)
+        
+        # Save to GCS for later download
+        gcs_file_name = await vertex_service.upload_to_gcs(image_bytes)
+        
+        photo_file = BufferedInputFile(image_bytes, filename="image.png")
+        
+        await msg.delete()
+        
+        if magic_prompt:
+            caption_text = f"✨ Magic Prompt:\n{model_text}"
+        else:
+            caption_text = f"✨ {user_prompt}"
+
+        if len(caption_text) > 1024:
+            caption_text = caption_text[:1021] + "..."
+
+        result_msg = await message.answer_photo(
+            photo=photo_file,
+            caption=caption_text,
+            reply_markup=get_image_response_keyboard()
+        )
+        
+        if result_msg.photo:
+            file_id = result_msg.photo[-1].file_id
+            await state.update_data(
+                last_prompt=user_prompt,
+                last_image_id=file_id,
+                gcs_file_name=gcs_file_name
+            )
+        else:
+            logger.error("No photo found in result message")
+        
+    except Exception as e:
+        logger.error(f"Image generation failed: {e}", exc_info=True)
+        try:
+            await msg.edit_text("❌ Извините, произошла ошибка при генерации изображения. Попробуйте другой запрос.")
+        except Exception:
+            logger.error("Could not send error message to user.")
+
 @router.message(GenStates.prompt_wait, F.photo | F.document)
 async def process_image_to_image_upload(message: Message, state: FSMContext):
     # Determine file_id from photo or document
