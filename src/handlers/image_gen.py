@@ -102,14 +102,17 @@ async def process_image_prompt(message: Message, state: FSMContext):
                 f"User request: '{user_prompt}'. "
                 f"Desired Style: {style}. {res_prompt} "
                 f"Aspect Ratio: {aspect_ratio}. "
-                f"Action: 1. Create a detailed, creative prompt in English for this image. 2. GENERATE the image."
+                f"Action: GENERATE the image. "
+                f"In your text response, provide ONLY a very brief, one-sentence description of the image in Russian. "
+                f"DO NOT include your reasoning, thoughts, or internal monologue."
             )
         else:
             full_user_prompt = (
                 f"User request: '{user_prompt}'. "
                 f"Style: {style}. {res_prompt} "
                 f"Aspect Ratio: {aspect_ratio}. "
-                f"Action: GENERATE the image exactly as described. Do not embellish."
+                f"Action: GENERATE the image exactly as described. Do not embellish. "
+                f"In your text response, provide ONLY a very brief, one-sentence description of the image in Russian."
             )
         
         # Single call to Gemini 3 Image
@@ -271,14 +274,17 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
                 f"User request: '{original_prompt}'. "
                 f"Desired Style: {style}. "
                 f"Aspect Ratio: {aspect_ratio}. "
-                f"Action: 1. Create a detailed, creative prompt in English for this image. 2. GENERATE the image."
+                f"Action: GENERATE the image. "
+                f"In your text response, provide ONLY a very brief, one-sentence description of the image in Russian. "
+                f"DO NOT include your reasoning, thoughts, or internal monologue."
             )
         else:
             full_user_prompt = (
                 f"User request: '{original_prompt}'. "
                 f"Style: {style}. "
                 f"Aspect Ratio: {aspect_ratio}. "
-                f"Action: GENERATE the image exactly as described."
+                f"Action: GENERATE the image exactly as described. "
+                f"In your text response, provide ONLY a very brief, one-sentence description of the image in Russian."
             )
 
         image_bytes, model_text = await vertex_service.generate_image(full_user_prompt, aspect_ratio=aspect_ratio)

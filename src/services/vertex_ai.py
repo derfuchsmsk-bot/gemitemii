@@ -73,7 +73,9 @@ class VertexAIService:
         full_prompt = (
             f"User request: '{prompt}'. "
             f"Aspect Ratio: {aspect_ratio}. "
-            f"Action: 1. Create a detailed prompt in English for this image. 2. GENERATE the image."
+            f"Action: GENERATE the image. "
+            f"In your text response, provide ONLY a very brief, one-sentence description of the image in Russian. "
+            f"DO NOT include your reasoning, thoughts, or internal monologue."
         )
         
         logger.info(f"Generating image with AR: {aspect_ratio}")
