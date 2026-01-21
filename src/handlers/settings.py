@@ -9,7 +9,7 @@ router = Router()
 async def settings_menu(message: Message):
     user_settings = get_user_settings(message.from_user.id)
     text = (
-        "⚙️ **Настройки бота**\n\n"
+        "⚙️ Настройки бота\n\n"
         f"🧠 Модель: {user_settings.get('model', 'Auto')}\n"
         f"📐 Соотношение сторон: {user_settings.get('aspect_ratio')}\n"
         f"🎨 Стиль: {user_settings.get('style')}"
@@ -44,7 +44,7 @@ async def setting_callback(callback: CallbackQuery):
     # Refresh message text to show new settings
     user_settings = get_user_settings(user_id)
     text = (
-        "⚙️ **Настройки бота**\n\n"
+        "⚙️ Настройки бота\n\n"
         f"🧠 Модель: {user_settings.get('model', 'Auto')}\n"
         f"📐 Соотношение сторон: {user_settings.get('aspect_ratio')}\n"
         f"🎨 Стиль: {user_settings.get('style')}"

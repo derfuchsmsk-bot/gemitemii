@@ -25,7 +25,7 @@ async def image_mode_entry(message: Message, state: FSMContext):
     res = settings.get("resolution", "Standard")
     
     text = (
-        "🎨 **Режим Nano Banana Pro**\n\n"
+        "🎨 Режим Nano Banana Pro\n\n"
         "Введите описание картинки, которую хотите создать.\n"
         "Вы можете изменить параметры генерации кнопками ниже перед отправкой текста 👇"
     )
@@ -74,10 +74,75 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
         
     await callback.answer()
 
-@router.message(GenStates.prompt_wait)
-async def process_image_prompt(message: Message, state: FSMContext):
-    user_prompt = message.text
-    user_id = message.from_user.id
+@router.message(GenStates.prompt_wait, F.photo | F.document)
+async def process_image_to_image_upload(message: Message, state: FSMContext):
+    # Determine file_id from photo or document
+    file_id = None
+    if message.photo:
+        file_id = message.photo[-1].file_id
+    elif message.document:
+        if message.document.mime_type.startswith("image/"):
+            file_id = message.document.file_id
+        else:
+            await message.answer("Пожалуйста, отправьте изображение (фото или файл-картинку).")
+            return
+
+    if file_id:
+        await state.update_data(img2img_base_file_id=file_id)
+        await state.set_state(GenStates.img2img_text_wait)
+        await message.answer("Изображение получено! Теперь напишите, что нужно с ним сделать (например: 'Сделай это в стиле киберпанк' или 'Добавь кота').")
+
+@router.message(GenStates.img2img_text_wait, F.text)
+async def process_img2img_instruction(message: Message, state: FSMContext):
+    data = await state.get_data()
+    file_id = data.get("img2img_base_file_id")
+    instruction = message.text
+    
+    if not file_id:
+        await message.answer("Ошибка: исходное изображение потеряно. Попробуйте отправить его снова.")
+        await state.set_state(GenStates.prompt_wait)
+        return
+
+    msg = await message.answer("🎨 Обрабатываю ваше изображение...")
+
+    try:
+        # Download from Telegram
+        bot = message.bot
+        file = await bot.get_file(file_id)
+        image_io = await bot.download_file(file.file_path)
+        image_bytes = image_io.read()
+
+        # Use edit_image from vertex_service (it handles image + text prompt)
+        edited_image_bytes = await vertex_service.edit_image(image_bytes, instruction)
+        
+        # Save to GCS
+        new_gcs_file = await vertex_service.upload_to_gcs(edited_image_bytes)
+        
+        photo_file = BufferedInputFile(edited_image_bytes, filename="img2img_result.png")
+        
+        await msg.delete()
+        
+        caption_text = f"✨ Image-to-Image: {instruction}"
+        if len(caption_text) > 1024: caption_text = caption_text[:1021] + "..."
+
+        result_msg = await message.answer_photo(
+            photo=photo_file,
+            caption=caption_text,
+            reply_markup=get_image_response_keyboard()
+        )
+        
+        if result_msg.photo:
+            await state.update_data(
+                last_image_id=result_msg.photo[-1].file_id,
+                gcs_file_name=new_gcs_file,
+                last_prompt=instruction
+            )
+            
+    except Exception as e:
+        logger.error(f"Image-to-Image failed: {e}", exc_info=True)
+        await msg.edit_text("❌ Произошла ошибка при обработке изображения.")
+    
+    await state.set_state(GenStates.prompt_wait)
     
     # Get user settings
     user_settings = get_user_settings(user_id)
@@ -125,9 +190,14 @@ async def process_image_prompt(message: Message, state: FSMContext):
         
         await msg.delete()
         
-        caption_text = f"✨ {model_text[:900]}..." if len(model_text) > 900 else f"✨ {model_text}"
-        if not caption_text.strip() or caption_text == "✨ ...":
-             caption_text = f"✨ {user_prompt}"
+        # Option B: Use model_text if Magic is ON, else original prompt
+        if magic_prompt:
+            caption_text = f"✨ Magic Prompt:\n{model_text}"
+        else:
+            caption_text = f"✨ {user_prompt}"
+
+        if len(caption_text) > 1024:
+            caption_text = caption_text[:1021] + "..."
 
         result_msg = await message.answer_photo(
             photo=photo_file,
@@ -209,7 +279,7 @@ async def start_image_edit(callback: CallbackQuery, state: FSMContext):
 
     await state.set_state(GenStates.edit_wait)
     await callback.message.answer(
-        "✏️ **Режим редактирования**\n\n"
+        "✏️ Режим редактирования\n\n"
         "Опишите, что вы хотите изменить в этом изображении.\n"
         "Например: 'Сделай небо красным' или 'Добавь кота на стул'."
     )
@@ -320,8 +390,13 @@ async def regenerate_image(callback: CallbackQuery, state: FSMContext):
         
         await msg.delete()
         
-        caption_text = f"✨ {model_text[:900]}..." if len(model_text) > 900 else f"✨ {model_text}"
-        if not caption_text.strip(): caption_text = f"✨ {original_prompt}"
+        if magic_prompt:
+            caption_text = f"✨ Magic Prompt:\n{model_text}"
+        else:
+            caption_text = f"✨ {original_prompt}"
+
+        if len(caption_text) > 1024:
+            caption_text = caption_text[:1021] + "..."
 
         result_msg = await callback.message.answer_photo(
             photo=photo_file,

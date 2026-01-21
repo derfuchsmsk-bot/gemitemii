@@ -107,19 +107,22 @@ class VertexAIService:
         return await self._retry_request(_call)
 
     async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> tuple[bytes, str]:
-        
+        # Note: We now explicitly ask the model to separate the enhanced prompt from the image
+        # Using a marker like "PROMPT:" to easily extract it if the model adds junk.
         full_prompt = (
             f"User request: '{prompt}'. "
             f"Aspect Ratio: {aspect_ratio}. "
             f"Action: GENERATE the image. "
-            f"In your text response, provide ONLY a very brief, one-sentence description of the image in Russian. "
-            f"DO NOT include your reasoning, thoughts, or internal monologue."
+            f"TEXT RESPONSE INSTRUCTIONS: Provide an enhanced, detailed version of the user request in English. "
+            f"The enhanced description should be descriptive and artistic. "
+            f"DO NOT include any thinking, analysis, or introductory text. "
+            f"ONLY the final enhanced prompt text."
         )
         
         logger.info(f"Generating image with AR: {aspect_ratio}")
         
         async def _call():
-            # Increased timeout significantly for image generation (can take 3-5 mins on cold start)
+            # Increased timeout significantly for image generation
             response = await asyncio.wait_for(self.image_model.generate_content_async(full_prompt), timeout=300.0)
             
             image_bytes = None
@@ -135,20 +138,22 @@ class VertexAIService:
                         except Exception:
                             pass
                         
-                        # Handle inline_data (images)
-                        # Try both 'inline_data' attribute and checking mime_type
                         if hasattr(part, 'inline_data') and part.inline_data:
                              image_bytes = part.inline_data.data
                              break
-            else:
-                logger.warning("No candidates in response")
+            
+            # Clean up the text response (remove common thinking markers if they still appear)
+            clean_text = text_response.strip()
+            if "**" in clean_text: # Often models use markdown for "Thinking"
+                # Try to take only the part that looks like a prompt
+                lines = [l for l in clean_text.split("\n") if l.strip() and not l.strip().startswith("*")]
+                if lines:
+                    clean_text = " ".join(lines)
 
             if not image_bytes:
-                error_msg = f"No image generated. Model response: {text_response[:500]}"
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+                raise ValueError(f"No image generated. Response: {clean_text[:200]}")
                 
-            return image_bytes, text_response.strip()
+            return image_bytes, clean_text
 
         return await self._retry_request(_call)
 
