@@ -7,23 +7,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from google.cloud import storage
+import uuid
+
+// ... existing code ...
+
 class VertexAIService:
     def __init__(self):
-        # Use us-central1 as fallback or main location, 
-        # as global prediction is sometimes tricky with SDKs.
-        # But for Gemini 3, let's try to respect the config unless forced.
-        # Given 429 errors and docs about 'global' endpoint support:
-        
-        # We explicitly set location to 'us-central1' because:
-        # 1. 'global' location in init often throws "location must be a region" in Python SDK.
-        # 2. 'us-central1' is the main region where Gemini 3 lives.
-        # 3. If user wants to use Global Endpoint feature (for routing), it is usually handled 
-        #    by not specifying location or using specific api_endpoint, but 'us-central1' is the safest bet for resources.
-        
-        # However, to use the "Global" endpoint (publishers/google/models/...), 
-        # we might need to set api_endpoint='us-central1-aiplatform.googleapis.com' but use a global resource name?
-        # No, usually just picking a region like us-central1 works best for quota.
-        
         vertexai.init(
             project=settings.PROJECT_ID, 
             location=settings.REGION 
@@ -32,6 +22,44 @@ class VertexAIService:
         self.flash_model = GenerativeModel("gemini-3-flash-preview") 
         self.pro_model = GenerativeModel("gemini-3-pro-preview")
         self.image_model = GenerativeModel("gemini-3-pro-image-preview")
+        
+        # Initialize GCS client
+        try:
+            self.storage_client = storage.Client(project=settings.PROJECT_ID)
+        except Exception as e:
+            logger.error(f"Failed to initialize GCS client: {e}")
+            self.storage_client = None
+
+    async def upload_to_gcs(self, image_bytes: bytes) -> str:
+        """Uploads image to GCS and returns the file name (UUID)"""
+        if not self.storage_client or not settings.GCS_BUCKET_NAME:
+            return None
+            
+        try:
+            bucket = self.storage_client.bucket(settings.GCS_BUCKET_NAME)
+            file_name = f"{uuid.uuid4()}.png"
+            blob = bucket.blob(file_name)
+            
+            # Use run_in_executor for synchronous GCS library
+            await asyncio.to_thread(blob.upload_from_string, image_bytes, content_type="image/png")
+            
+            return file_name
+        except Exception as e:
+            logger.error(f"GCS Upload failed: {e}")
+            return None
+
+    async def download_from_gcs(self, file_name: str) -> bytes:
+        """Downloads image from GCS"""
+        if not self.storage_client or not settings.GCS_BUCKET_NAME:
+            return None
+            
+        try:
+            bucket = self.storage_client.bucket(settings.GCS_BUCKET_NAME)
+            blob = bucket.blob(file_name)
+            return await asyncio.to_thread(blob.download_as_bytes)
+        except Exception as e:
+            logger.error(f"GCS Download failed: {e}")
+            return None
 
     async def _retry_request(self, func, *args, **kwargs):
         """Retry wrapper for 429 errors"""

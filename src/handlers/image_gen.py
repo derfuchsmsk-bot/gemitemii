@@ -118,6 +118,9 @@ async def process_image_prompt(message: Message, state: FSMContext):
         # Single call to Gemini 3 Image
         image_bytes, model_text = await vertex_service.generate_image(full_user_prompt, aspect_ratio=aspect_ratio)
         
+        # Save to GCS for later download
+        gcs_file_name = await vertex_service.upload_to_gcs(image_bytes)
+        
         photo_file = BufferedInputFile(image_bytes, filename="image.png")
         
         await msg.delete()
@@ -132,13 +135,12 @@ async def process_image_prompt(message: Message, state: FSMContext):
             reply_markup=get_image_response_keyboard()
         )
         
-        # Save necessary data
-        # IMPORTANT: We need to check if photo exists and get ID properly
         if result_msg.photo:
             file_id = result_msg.photo[-1].file_id
             await state.update_data(
-                last_prompt=user_prompt, # Save ORIGINAL prompt so regen respects current settings
-                last_image_id=file_id
+                last_prompt=user_prompt,
+                last_image_id=file_id,
+                gcs_file_name=gcs_file_name # Save reference to GCS
             )
         else:
             logger.error("No photo found in result message")
@@ -154,37 +156,43 @@ async def process_image_prompt(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "img_download")
 async def download_image(callback: CallbackQuery, state: FSMContext):
-    # Try to get file_id from message first (more reliable than state)
-    file_id = None
-    if callback.message.photo:
-        file_id = callback.message.photo[-1].file_id
+    data = await state.get_data()
+    gcs_file_name = data.get("gcs_file_name")
     
-    if not file_id:
-        data = await state.get_data()
-        file_id = data.get("last_image_id")
-    
-    if not file_id:
-        await callback.answer("⚠️ Файл не найден. Сгенерируйте заново.", show_alert=True)
-        return
-
-    await callback.answer("⏳ Подготавливаю файл...")
+    await callback.answer("⏳ Скачиваю оригинал из Google Cloud...")
 
     try:
-        # Download file from Telegram servers
-        bot = callback.bot
-        file = await bot.get_file(file_id)
-        image_io = await bot.download_file(file.file_path)
+        if gcs_file_name:
+            # Method 1: Get original from GCS (Best Quality)
+            image_bytes = await vertex_service.download_from_gcs(gcs_file_name)
+            if image_bytes:
+                document_file = BufferedInputFile(image_bytes, filename="original_image.png")
+                await callback.message.answer_document(
+                    document=document_file, 
+                    caption="📥 Оригинал из Google Cloud Storage (100% качество)"
+                )
+                return
+
+        # Method 2: Fallback to Telegram servers if GCS fails or file not in GCS
+        file_id = None
+        if callback.message.photo:
+            file_id = callback.message.photo[-1].file_id
         
-        # Send it back as a document (uncompressed)
-        document_file = BufferedInputFile(image_io.read(), filename="generated_image.png")
-        
-        await callback.message.answer_document(
-            document=document_file, 
-            caption="📥 Ваше изображение в исходном качестве"
-        )
+        if not file_id:
+            file_id = data.get("last_image_id")
+
+        if file_id:
+            bot = callback.bot
+            file = await bot.get_file(file_id)
+            image_io = await bot.download_file(file.file_path)
+            document_file = BufferedInputFile(image_io.read(), filename="image.png")
+            await callback.message.answer_document(document=document_file, caption="📥 Файл (через Telegram)")
+        else:
+            await callback.answer("❌ Файл не найден", show_alert=True)
+            
     except Exception as e:
-        logger.error(f"Failed to download/re-upload file: {e}")
-        await callback.answer("❌ Ошибка при подготовке файла", show_alert=True)
+        logger.error(f"Download failed: {e}")
+        await callback.answer("❌ Ошибка при скачивании", show_alert=True)
 
 @router.callback_query(F.data == "img_edit")
 async def start_image_edit(callback: CallbackQuery, state: FSMContext):

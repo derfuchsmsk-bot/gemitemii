@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # Google Cloud
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
     PROJECT_ID: str
+    GCS_BUCKET_NAME: str | None = os.getenv("GCS_BUCKET_NAME")
     REGION: str = os.getenv("REGION", "global")
     
     # App
