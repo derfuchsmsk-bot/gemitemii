@@ -6,7 +6,8 @@ USER_SETTINGS = {}
 DEFAULT_SETTINGS = {
     "aspect_ratio": "1:1",
     "style": "Фотореализм",
-    "magic_prompt": True # Enabled by default
+    "magic_prompt": True,
+    "resolution": "Standard" # Standard, HD, 4K
 }
 
 def get_user_settings(user_id: int) -> dict:

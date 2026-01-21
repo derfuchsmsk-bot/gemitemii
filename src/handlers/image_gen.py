@@ -21,6 +21,7 @@ async def image_mode_entry(message: Message, state: FSMContext):
     ar = settings.get("aspect_ratio", "1:1")
     style = settings.get("style", "Фотореализм")
     magic = settings.get("magic_prompt", True)
+    res = settings.get("resolution", "Standard")
     
     text = (
         "🎨 **Режим Nano Banana Pro**\n\n"
@@ -28,19 +29,19 @@ async def image_mode_entry(message: Message, state: FSMContext):
         "Вы можете изменить параметры генерации кнопками ниже перед отправкой текста 👇"
     )
     
-    await message.answer(text, reply_markup=get_generation_settings_keyboard(ar, style, magic))
+    await message.answer(text, reply_markup=get_generation_settings_keyboard(ar, style, magic, res))
     logger.info(f"User {user_id} entered image generation mode")
 
 @router.callback_query(F.data.startswith("gen_set_"))
 async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
-    # Format: gen_set_ar_1:1 or gen_set_style_Name or gen_set_magic_on/off
+    # Format: gen_set_ar_1:1 or gen_set_style_Name or gen_set_magic_on/off or gen_set_res_4K
     try:
         parts = callback.data.split("_")
         if len(parts) < 4:
             await callback.answer("Ошибка данных кнопки")
             return
             
-        action = parts[2] # ar, style, magic
+        action = parts[2] # ar, style, magic, res
         value = parts[3]
         
         user_id = callback.from_user.id
@@ -50,18 +51,20 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
         elif action == "style":
             update_user_setting(user_id, "style", value)
         elif action == "magic":
-            # Value is 'on' or 'off'
             is_on = (value == "on")
             update_user_setting(user_id, "magic_prompt", is_on)
+        elif action == "res":
+            update_user_setting(user_id, "resolution", value)
             
         # Refresh keyboard
         settings = get_user_settings(user_id)
         ar = settings.get("aspect_ratio", "1:1")
         style = settings.get("style", "Фотореализм")
         magic = settings.get("magic_prompt", True)
+        res = settings.get("resolution", "Standard")
         
         await callback.message.edit_reply_markup(
-            reply_markup=get_generation_settings_keyboard(ar, style, magic)
+            reply_markup=get_generation_settings_keyboard(ar, style, magic, res)
         )
     except Exception as e:
         logger.error(f"Settings callback error: {e}")
@@ -78,26 +81,32 @@ async def process_image_prompt(message: Message, state: FSMContext):
     aspect_ratio = user_settings.get("aspect_ratio", "1:1")
     style = user_settings.get("style", "Фотореализм")
     magic_prompt = user_settings.get("magic_prompt", True)
+    resolution = user_settings.get("resolution", "Standard")
     
     magic_status = "ON" if magic_prompt else "OFF"
-    msg = await message.answer(f"🎨 Генерирую... (AR: {aspect_ratio}, Style: {style}, Magic: {magic_status})")
+    msg = await message.answer(f"🎨 Генерирую... (AR: {aspect_ratio}, Style: {style}, Magic: {magic_status}, Res: {resolution})")
     
     try:
-        # Decide prompt logic based on Magic setting
+        # Construct prompt suffix based on resolution
+        res_prompt = ""
+        if resolution == "HD":
+            res_prompt = "High definition, sharp details."
+        elif resolution == "4K":
+            res_prompt = "4k resolution, 8k textures, highly detailed, ultra-sharp focus."
+
         if magic_prompt:
             full_user_prompt = (
                 f"User request: '{user_prompt}'. "
-                f"Desired Style: {style}. "
+                f"Desired Style: {style}. {res_prompt} "
                 f"Aspect Ratio: {aspect_ratio}. "
                 f"Action: 1. Create a detailed, creative prompt in English for this image. 2. GENERATE the image."
             )
         else:
-            # Direct mode: Just execute what user asked, maybe translate if needed but keep it simple
             full_user_prompt = (
                 f"User request: '{user_prompt}'. "
-                f"Style: {style}. "
+                f"Style: {style}. {res_prompt} "
                 f"Aspect Ratio: {aspect_ratio}. "
-                f"Action: GENERATE the image exactly as described. Do not embellish or change the subject significantly."
+                f"Action: GENERATE the image exactly as described. Do not embellish."
             )
         
         # Single call to Gemini 3 Image

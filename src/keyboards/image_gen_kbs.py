@@ -1,14 +1,21 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-def get_generation_settings_keyboard(current_ar: str, current_style: str, magic_prompt: bool) -> InlineKeyboardMarkup:
+def get_generation_settings_keyboard(current_ar: str, current_style: str, magic_prompt: bool, current_res: str) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     
     # Row 1: Magic Prompt Toggle
     magic_text = "✨ Magic: ON" if magic_prompt else "⚪ Magic: OFF"
     builder.row(InlineKeyboardButton(text=magic_text, callback_data=f"gen_set_magic_{'off' if magic_prompt else 'on'}"))
 
-    # Row 2: Aspect Ratio toggles (Popular)
+    # Row 2: Resolution
+    builder.row(
+        InlineKeyboardButton(text=f"{'✅ ' if current_res == 'Standard' else ''}SD", callback_data="gen_set_res_Standard"),
+        InlineKeyboardButton(text=f"{'✅ ' if current_res == 'HD' else ''}HD", callback_data="gen_set_res_HD"),
+        InlineKeyboardButton(text=f"{'✅ ' if current_res == '4K' else ''}4K+", callback_data="gen_set_res_4K")
+    )
+
+    # Row 3: Aspect Ratio toggles (Popular)
     builder.row(
         InlineKeyboardButton(text=f"{'✅ ' if current_ar == '1:1' else ''}1:1", callback_data="gen_set_ar_1:1"),
         InlineKeyboardButton(text=f"{'✅ ' if current_ar == '16:9' else ''}16:9", callback_data="gen_set_ar_16:9"),
