@@ -19,8 +19,12 @@ def get_context_ref(user_id: int):
 async def chat_mode_entry(message: Message):
     await message.answer("💬 Режим чата активирован. Пиши любой вопрос!")
 
-@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Чат", "🎨 Текст в фото", "🖼 Фото в фото", "⚙️ Настройки", "❓ Помощь"}))
-async def chat_handler(message: Message):
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Чат", "🎨 Текст в фото", "🖼 Фото в фото", "⚙️ Настройки", "❓ Помощь", "🔘 Чат (Gemini)", "🎨 Nano Banana Pro"}))
+async def chat_handler(message: Message, state: FSMContext):
+    # Проверяем, не находится ли пользователь в процессе генерации фото
+    current_state = await state.get_state()
+    if current_state in [GenStates.prompt_wait, GenStates.edit_wait, GenStates.img2img_text_wait]:
+        return # Игнорируем, так как это должен обработать image_gen.py
     user_id = message.from_user.id
     history = []
     raw_history = []
