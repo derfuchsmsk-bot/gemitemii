@@ -60,7 +60,7 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
 
 @router.message(GenStates.prompt_wait)
 async def process_image_prompt(message: Message, state: FSMContext):
-    prompt = message.text
+    user_prompt = message.text
     user_id = message.from_user.id
     
     # Get user settings
@@ -68,40 +68,57 @@ async def process_image_prompt(message: Message, state: FSMContext):
     aspect_ratio = user_settings.get("aspect_ratio", "1:1")
     style = user_settings.get("style", "Фотореализм")
     
-    full_prompt = f"{prompt}. Style: {style}"
-    
-    msg = await message.answer(f"🎨 Генерирую изображение...\n(AR: {aspect_ratio}, Style: {style})")
+    msg = await message.answer(f"🎨 Придумываю детали и генерирую...\n(AR: {aspect_ratio}, Style: {style})")
     
     try:
+        # Step 1: Enhance prompt using Gemini Text model
+        # This makes short prompts like "beautiful photo" into detailed descriptions
+        enhancement_instruction = (
+            f"You are an expert prompt engineer for AI image generation. "
+            f"The user wants an image described as: '{user_prompt}'. "
+            f"The desired style is '{style}'. "
+            f"Create a detailed, creative, and high-quality prompt in English for this image. "
+            f"Describe lighting, composition, textures, and mood. "
+            f"Output ONLY the prompt text, nothing else."
+        )
+        
+        # Use existing text generation service (Gemini 1.5/3 Pro)
+        enhanced_prompt = await vertex_service.generate_text(enhancement_instruction, model_type="pro")
+        
+        # Log for debugging quality
+        logger.info(f"Original prompt: {user_prompt} -> Enhanced: {enhanced_prompt}")
+        
+        # Step 2: Generate Image with the enhanced prompt
+        # We append Aspect Ratio info for the model
+        full_prompt = f"{enhanced_prompt}. Aspect Ratio: {aspect_ratio}"
+        
         image_bytes = await vertex_service.generate_image(full_prompt, aspect_ratio=aspect_ratio)
         photo_file = BufferedInputFile(image_bytes, filename="image.png")
         
         await msg.delete()
         
-        # Send photo and capture result to get file_id
+        # Send photo
+        # Show the enhanced prompt in caption so user knows what was generated
+        # Truncate caption if too long (Telegram limit is 1024 chars)
+        caption_text = f"✨ {enhanced_prompt[:900]}..." if len(enhanced_prompt) > 900 else f"✨ {enhanced_prompt}"
+        
         result_msg = await message.answer_photo(
             photo=photo_file,
-            caption=f"✨ {prompt}",
+            caption=caption_text,
             reply_markup=get_image_response_keyboard()
         )
         
-        # Save necessary data for actions (regenerate, download)
-        # photo[-1] is the highest resolution
+        # Save necessary data
         file_id = result_msg.photo[-1].file_id
         
         await state.update_data(
-            last_prompt=prompt, 
+            last_prompt=enhanced_prompt, # Save the ENHANCED prompt for regeneration
             last_image_id=file_id
         )
         
-        # Stay in prompt_wait or move to a "review" state?
-        # Staying allows sending new text to generate new image immediately
-        # But for "Regenerate" button to work we need the data in state.
-        
     except Exception as e:
         logger.error(f"Image generation failed: {e}")
-        await msg.edit_text(f"❌ Ошибка генерации: {str(e)}")
-        # Don't clear state so user can try again
+        await msg.edit_text(f"❌ Ошибка: {str(e)}")
 
 @router.callback_query(F.data == "img_download")
 async def download_image(callback: CallbackQuery, state: FSMContext):
