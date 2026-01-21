@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     # Telegram
     BOT_TOKEN: str
     WEBHOOK_URL: str | None = None
-    TELEGRAM_SECRET_TOKEN: str | None = None
     
     # Google Cloud
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
@@ -31,6 +30,7 @@ class Settings(BaseSettings):
     def validate(self):
         if not self.BOT_TOKEN:
             raise ValueError("BOT_TOKEN is required")
+        
         if not self.PROJECT_ID:
             # Don't fail during build/local if PROJECT_ID is missing but not needed immediately
             logger.warning("PROJECT_ID is not set. Firestore and Vertex AI may fail.")

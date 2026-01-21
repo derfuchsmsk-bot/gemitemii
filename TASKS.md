@@ -44,9 +44,9 @@
 
 ### 7. Rate Limiting
 **Файлы**: `src/handlers/chat.py`, `src/handlers/image_gen.py`
-- [ ] Добавить middleware для ограничения запросов
+- [x] Добавить middleware для ограничения запросов (RateLimitMiddleware добавлен)
 - [ ] Реализовать очередь запросов к Vertex AI
-- [ ] Добавить ограничения на частоту для предотвращения DDoS
+- [x] Добавить ограничения на частоту для предотвращения DDoS
 
 ### 8. Error Handling
 **Файлы**: Все обработчики

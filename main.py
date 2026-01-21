@@ -4,6 +4,7 @@ from fastapi import FastAPI, Header, HTTPException
 from aiogram import Bot, Dispatcher, types
 from src.config import settings
 from src.handlers import common, chat, image_gen, settings as settings_handler
+from src.middlewares.throttling import RateLimitMiddleware
 from aiogram.fsm.storage.memory import MemoryStorage
 from starlette.status import HTTP_403_FORBIDDEN
 import asyncio
@@ -18,6 +19,9 @@ app = FastAPI()
 # Initialize Bot and Dispatcher here for Webhook
 bot = Bot(token=settings.BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
+
+# Setup middlewares
+dp.message.middleware(RateLimitMiddleware(limit=1.0))
 
 # Include routers
 dp.include_router(common.router)
@@ -40,11 +44,10 @@ async def on_startup():
             webhook_url = f"{webhook_url.rstrip('/')}/webhook"
             settings.WEBHOOK_URL = webhook_url
 
-        if webhook_info.url != webhook_url or settings.TELEGRAM_SECRET_TOKEN:
+        if webhook_info.url != webhook_url:
             logger.info(f"Setting webhook to {webhook_url}")
             await bot.set_webhook(
-                url=webhook_url,
-                secret_token=settings.TELEGRAM_SECRET_TOKEN
+                url=webhook_url
             )
         else:
             logger.info("Webhook already set correctly.")
@@ -54,13 +57,7 @@ async def on_startup():
         # to let the container start and listen on port
 
 @app.post("/webhook")
-async def webhook(
-    update: dict,
-    x_telegram_bot_api_secret_token: str | None = Header(None)
-):
-    if settings.TELEGRAM_SECRET_TOKEN and x_telegram_bot_api_secret_token != settings.TELEGRAM_SECRET_TOKEN:
-        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Invalid secret token")
-    
+async def webhook(update: dict):
     telegram_update = types.Update(**update)
     await dp.feed_update(bot, telegram_update)
     return {"ok": True}
