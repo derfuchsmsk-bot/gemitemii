@@ -23,9 +23,17 @@ class VertexAIService:
 
     async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> bytes:
         # Generate image using Gemini 3 Pro Image
-        # Based on documentation: Output is "Text and image"
+        # Output is "Text and image"
         
-        response = await self.image_model.generate_content_async(prompt)
+        # Add aspect ratio instructions to prompt
+        # While the API documentation mentions Aspect Ratio, typically for LLMs it's part of the prompt or a specific param if supported.
+        # Since I can't pass config params directly to generate_content yet for image specific configs easily without tools config,
+        # I'll rely on prompt following which Gemini 3 is excellent at.
+        
+        # Map aspect ratio short codes to descriptive text if needed, or pass as is.
+        full_prompt = f"{prompt}\n\nTechnical details: Aspect Ratio {aspect_ratio}"
+        
+        response = await self.image_model.generate_content_async(full_prompt)
         
         # Extract image from response parts
         # Gemini usually returns parts. We need to find the one with inline_data (image)
@@ -33,9 +41,6 @@ class VertexAIService:
             # Check for inline data (image bytes)
             if hasattr(part, 'inline_data') and part.inline_data:
                  return part.inline_data.data
-            
-            # Or maybe it's accessible differently in the SDK version
-            # Usually part.inline_data.data is correct for python-vertexai
             
         # If no image found, raise error
         raise ValueError("No image generated in response. The model might have refused or returned only text.")

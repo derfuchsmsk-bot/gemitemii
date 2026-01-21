@@ -41,6 +41,9 @@ def get_image_response_keyboard() -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(text="🔄 Еще вариант", callback_data="img_regenerate"),
+        InlineKeyboardButton(text="📥 Скачать файл", callback_data="img_download")
+    )
+    builder.row(
         InlineKeyboardButton(text="✏️ Редактировать", callback_data="img_edit")
     )
     return builder.as_markup()
