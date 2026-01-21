@@ -1,4 +1,4 @@
-from aiogram ter, F
+from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 from src.services.vertex_ai import vertex_service
