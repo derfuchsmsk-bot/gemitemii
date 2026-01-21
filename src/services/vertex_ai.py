@@ -13,8 +13,8 @@ class VertexAIService:
             project=settings.PROJECT_ID, 
             location=settings.REGION
         )
-        self.flash_model = GenerativeModel("gemini-1.5-flash-preview-0514") 
-        self.pro_model = GenerativeModel("gemini-1.5-pro-preview-0514")
+        self.flash_model = GenerativeModel("gemini-3.0-flash-preview") 
+        self.pro_model = GenerativeModel("gemini-3.0-pro-preview")
         
         # Initialize Imagen model
         # Use 'imagegeneration@006' or newer for better quality
