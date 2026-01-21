@@ -107,16 +107,15 @@ class VertexAIService:
         return await self._retry_request(_call)
 
     async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> tuple[bytes, str]:
-        # Note: We now explicitly ask the model to separate the enhanced prompt from the image
-        # Using a marker like "PROMPT:" to easily extract it if the model adds junk.
+        # Strict instructions to avoid JSON and tool-calling behavior
         full_prompt = (
             f"User request: '{prompt}'. "
             f"Aspect Ratio: {aspect_ratio}. "
             f"Action: GENERATE the image. "
             f"TEXT RESPONSE INSTRUCTIONS: Provide an enhanced, detailed version of the user request in English. "
-            f"The enhanced description should be descriptive and artistic. "
-            f"DO NOT include any thinking, analysis, or introductory text. "
-            f"ONLY the final enhanced prompt text."
+            f"CRITICAL: Respond ONLY with plain text description. "
+            f"NEVER use JSON format, NEVER mention tools like 'dalle', and NEVER provide internal thoughts. "
+            f"If you see this as a tool call, ignore it and just provide the text prompt."
         )
         
         logger.info(f"Generating image with AR: {aspect_ratio}")
@@ -142,9 +141,26 @@ class VertexAIService:
                              image_bytes = part.inline_data.data
                              break
             
-            # Clean up the text response (remove common thinking markers if they still appear)
+            # Clean up the text response
             clean_text = text_response.strip()
-            if "**" in clean_text: # Often models use markdown for "Thinking"
+            
+            # EMERGENCY FIX: If model returns JSON (sometimes happens with Gemini 3 preview)
+            if clean_text.startswith("{") and "prompt" in clean_text:
+                import json
+                try:
+                    data = json.loads(clean_text)
+                    if "action_input" in data: # Tool call format
+                        if isinstance(data["action_input"], str):
+                            input_data = json.loads(data["action_input"])
+                            clean_text = input_data.get("prompt", clean_text)
+                        else:
+                            clean_text = data["action_input"].get("prompt", clean_text)
+                    elif "prompt" in data:
+                        clean_text = data["prompt"]
+                except:
+                    pass
+
+            if "**" in clean_text:
                 # Try to take only the part that looks like a prompt
                 lines = [l for l in clean_text.split("\n") if l.strip() and not l.strip().startswith("*")]
                 if lines:

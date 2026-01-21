@@ -19,7 +19,7 @@ def get_context_ref(user_id: int):
 async def chat_mode_entry(message: Message):
     await message.answer("💬 Режим чата активирован. Пиши любой вопрос!")
 
-@router.message(F.text & ~F.text.startswith("/"))
+@router.message(F.text & ~F.text.startswith("/") & ~F.text.in_({"💬 Чат", "🎨 Текст в фото", "🖼 Фото в фото", "⚙️ Настройки", "❓ Помощь"}))
 async def chat_handler(message: Message):
     user_id = message.from_user.id
     history = []

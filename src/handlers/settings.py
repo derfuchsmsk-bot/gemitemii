@@ -7,12 +7,21 @@ router = Router()
 
 @router.message(F.text == "⚙️ Настройки")
 async def settings_menu(message: Message):
-    user_settings = get_user_settings(message.from_user.id)
+    user_id = message.from_user.id
+    user_settings = get_user_settings(user_id)
+    
+    # Update defaults if missing
+    ar = user_settings.get("aspect_ratio", "1:1")
+    style = user_settings.get("style", "photo")
+    magic = user_settings.get("magic_prompt", True)
+    res = user_settings.get("resolution", "Standard")
+
     text = (
         "⚙️ Настройки бота\n\n"
-        f"🧠 Модель: {user_settings.get('model', 'Auto')}\n"
-        f"📐 Соотношение сторон: {user_settings.get('aspect_ratio')}\n"
-        f"🎨 Стиль: {user_settings.get('style')}"
+        f"📐 Соотношение сторон: {ar}\n"
+        f"🎨 Стиль: {style}\n"
+        f"✨ Magic Prompt: {'Вкл' if magic else 'Выкл'}\n"
+        f"📺 Разрешение: {res}"
     )
     await message.answer(text, reply_markup=get_settings_keyboard())
 
@@ -43,11 +52,17 @@ async def setting_callback(callback: CallbackQuery):
     
     # Refresh message text to show new settings
     user_settings = get_user_settings(user_id)
+    ar = user_settings.get("aspect_ratio", "1:1")
+    style = user_settings.get("style", "photo")
+    magic = user_settings.get("magic_prompt", True)
+    res = user_settings.get("resolution", "Standard")
+
     text = (
         "⚙️ Настройки бота\n\n"
-        f"🧠 Модель: {user_settings.get('model', 'Auto')}\n"
-        f"📐 Соотношение сторон: {user_settings.get('aspect_ratio')}\n"
-        f"🎨 Стиль: {user_settings.get('style')}"
+        f"📐 Соотношение сторон: {ar}\n"
+        f"🎨 Стиль: {style}\n"
+        f"✨ Magic Prompt: {'Вкл' if magic else 'Выкл'}\n"
+        f"📺 Разрешение: {res}"
     )
     
     await callback.message.edit_text(text, reply_markup=get_settings_keyboard())
