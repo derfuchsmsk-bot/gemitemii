@@ -20,12 +20,12 @@ class Settings(BaseSettings):
     PORT: int = int(os.getenv("PORT", "8080"))
     HOST: str = "0.0.0.0"
 
-    class Config:
+        class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
 
-        @property
+    @property
     def is_production(self) -> bool:
         return os.getenv("K_SERVICE") is not None
 
