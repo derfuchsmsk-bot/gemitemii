@@ -151,13 +151,19 @@ async def process_image_prompt(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "img_download")
 async def download_image(callback: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    file_id = data.get("last_image_id")
+    # Try to get file_id from message first (more reliable than state)
+    file_id = None
+    if callback.message.photo:
+        file_id = callback.message.photo[-1].file_id
+    
+    if not file_id:
+        data = await state.get_data()
+        file_id = data.get("last_image_id")
     
     logger.info(f"Attempting to download file_id: {file_id}")
     
     if not file_id:
-        await callback.answer("⚠️ Файл устарел или не найден. Сгенерируйте заново.", show_alert=True)
+        await callback.answer("⚠️ Файл не найден. Сгенерируйте заново.", show_alert=True)
         return
 
     try:
@@ -169,6 +175,17 @@ async def download_image(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "img_edit")
 async def start_image_edit(callback: CallbackQuery, state: FSMContext):
+    # Store the file_id in state when user clicks 'Edit' 
+    # so we know WHICH image to edit even if state was lost
+    if callback.message.photo:
+        file_id = callback.message.photo[-1].file_id
+        await state.update_data(last_image_id=file_id)
+        
+        # Also try to extract original prompt from caption if possible
+        caption = callback.message.caption or ""
+        if caption.startswith("✨ "):
+            await state.update_data(last_prompt=caption[2:].split("...")[0])
+
     await state.set_state(GenStates.edit_wait)
     await callback.message.answer(
         "✏️ **Режим редактирования**\n\n"
@@ -181,10 +198,14 @@ async def start_image_edit(callback: CallbackQuery, state: FSMContext):
 async def process_image_edit(message: Message, state: FSMContext):
     data = await state.get_data()
     file_id = data.get("last_image_id")
+    
+    # If file_id still missing, try to look at the previous message in chat history 
+    # (though AIogram doesn't make this easy, the state update in 'img_edit' should fix it)
+    
     edit_prompt = message.text
 
     if not file_id:
-        await message.answer("⚠️ Исходное изображение не найдено. Начните новую генерацию.")
+        await message.answer("⚠️ Исходное изображение не найдено. Нажмите кнопку 'Редактировать' под нужным изображением еще раз.")
         await state.set_state(GenStates.prompt_wait)
         return
 
@@ -220,11 +241,17 @@ async def process_image_edit(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "img_regenerate")
 async def regenerate_image(callback: CallbackQuery, state: FSMContext):
+    # Try to recover prompt from state or caption
     data = await state.get_data()
-    original_prompt = data.get("last_prompt") # This is now original user prompt
+    original_prompt = data.get("last_prompt")
     
+    if not original_prompt and callback.message.caption:
+        caption = callback.message.caption
+        if caption.startswith("✨ "):
+            original_prompt = caption[2:].split("...")[0]
+
     if not original_prompt:
-        await callback.answer("⚠️ Нет данных для повтора", show_alert=True)
+        await callback.answer("⚠️ Нет данных для повтора. Напишите новый запрос.", show_alert=True)
         return
     
     await callback.answer("🔄 Генерирую заново...")
