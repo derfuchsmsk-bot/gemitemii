@@ -29,13 +29,14 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return os.getenv("K_SERVICE") is not None
 
-    def validate(self):
+        def validate(self):
+        # We don't raise here anymore to prevent startup crash
         if not self.BOT_TOKEN:
-            raise ValueError("BOT_TOKEN is required")
+            logger.warning("BOT_TOKEN is not set. Bot will not function.")
         
         if not self.PROJECT_ID:
-            # Don't fail during build/local if PROJECT_ID is missing but not needed immediately
-            logger.warning("PROJECT_ID is not set. Firestore and Vertex AI may fail.")
+            logger.warning("PROJECT_ID is not set. Firestore and Vertex AI will fail.")
+        
         if self.is_production and not self.WEBHOOK_URL:
             logger.warning("WEBHOOK_URL is not set in production. Bot will not receive updates.")
 

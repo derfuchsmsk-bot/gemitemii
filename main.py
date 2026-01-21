@@ -23,8 +23,7 @@ async def lifespan(app: FastAPI):
         if not settings.PROJECT_ID:
             logger.error("PROJECT_ID environment variable is missing!")
             
-        webhook_url = settings.WEBHOOK_URL
-        if webhook_url:
+        if webhook_url and bot:
             if not webhook_url.endswith("/webhook"):
                 webhook_url = f"{webhook_url.rstrip('/')}/webhook"
                 settings.WEBHOOK_URL = webhook_url
@@ -37,6 +36,8 @@ async def lifespan(app: FastAPI):
                 secret_token=settings.TELEGRAM_SECRET
             )
             logger.info("Webhook set successfully")
+        elif not bot:
+            logger.error("Bot not initialized, cannot set webhook")
         else:
             logger.warning("WEBHOOK_URL is not set. Bot will not receive updates.")
     except Exception as e:
@@ -53,17 +54,24 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 # Initialize Bot and Dispatcher here for Webhook
-bot = Bot(token=settings.BOT_TOKEN)
-dp = Dispatcher(storage=MemoryStorage())
+try:
+    bot = Bot(token=settings.BOT_TOKEN or "dummy_token")
+    dp = Dispatcher(storage=MemoryStorage())
+except Exception as e:
+    logger.error(f"Error initializing Bot/Dispatcher: {e}")
+    # We still need these defined for the webhook handler
+    bot = None
+    dp = None
 
 # Setup middlewares
-dp.message.middleware(RateLimitMiddleware(limit=1.0))
+if dp:
+    dp.message.middleware(RateLimitMiddleware(limit=1.0))
 
-# Include routers
-dp.include_router(common.router)
-dp.include_router(image_gen.router) # Moved UP
-dp.include_router(settings_handler.router)
-dp.include_router(chat.router) # Moved DOWN
+    # Include routers
+    dp.include_router(common.router)
+    dp.include_router(image_gen.router) # Moved UP
+    dp.include_router(settings_handler.router)
+    dp.include_router(chat.router) # Moved DOWN
 
 @app.post("/webhook")
 async def webhook(
@@ -71,6 +79,10 @@ async def webhook(
     background_tasks: BackgroundTasks,
     x_telegram_bot_api_secret_token: str = Header(None)
 ):
+    if not bot or not dp:
+        logger.error("Webhook received but bot/dp not initialized")
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+
     if settings.TELEGRAM_SECRET and x_telegram_bot_api_secret_token != settings.TELEGRAM_SECRET:
         logger.warning("Unauthorized webhook request")
         raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Forbidden")
@@ -87,12 +99,15 @@ async def health():
 async def health_check():
     # Basic check to see if bot is responsive
     try:
-        await bot.get_me()
-        return {"status": "healthy", "bot": "ok"}
+        if bot:
+            await bot.get_me()
+            return {"status": "healthy", "bot": "ok"}
+        return {"status": "degraded", "bot": "not_initialized"}
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         return {"status": "unhealthy", "error": str(e)}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    print(f"Starting server on port {port}") # Added print for direct feedback
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
