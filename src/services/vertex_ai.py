@@ -29,7 +29,7 @@ class VertexAIService:
             location="us-central1" 
         )
         
-        self.flash_model = GenerativeModel("gemini-1.5-flash-001") 
+        self.flash_model = GenerativeModel("gemini-3-flash-preview") 
         self.pro_model = GenerativeModel("gemini-3-pro-preview")
         self.image_model = GenerativeModel("gemini-3-pro-image-preview")
 
