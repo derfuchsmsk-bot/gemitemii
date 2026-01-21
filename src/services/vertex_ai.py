@@ -1,24 +1,19 @@
 import vertexai
-from vertexai.preview.vision_models import ImageGenerationModel
 from vertexai.generative_models import GenerativeModel, Part, Image
 from src.config import settings
+import base64
 
 class VertexAIService:
     def __init__(self):
-        # In Cloud Run, credentials are automatically discovered if GOOGLE_APPLICATION_CREDENTIALS is not set
-        # But if it IS set in config.py (even to None/Empty), we should be careful.
-        
-        # Explicitly passing credentials=None forces ADC (Application Default Credentials)
         vertexai.init(
             project=settings.PROJECT_ID, 
             location=settings.REGION
         )
-        self.flash_model = GenerativeModel("gemini-3.0-flash-preview") 
-        self.pro_model = GenerativeModel("gemini-3.0-pro-preview")
+        self.flash_model = GenerativeModel("gemini-3-flash-preview") 
+        self.pro_model = GenerativeModel("gemini-3-pro-preview")
         
-        # Initialize Imagen model
-        # Use 'imagegeneration@006' or newer for better quality
-        self.imagen_model = ImageGenerationModel.from_pretrained("imagegeneration@006")
+        # New Gemini 3 Pro Image model (Nano Banana)
+        self.image_model = GenerativeModel("gemini-3-pro-image-preview")
 
     async def generate_text(self, prompt: str, history: list = None, model_type: str = "flash") -> str:
         model = self.flash_model if model_type == "flash" else self.pro_model
@@ -26,31 +21,37 @@ class VertexAIService:
         response = await chat.send_message_async(prompt)
         return response.text
 
-    async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> str:
-        # Generate image using Imagen
-        images = self.imagen_model.generate_images(
-            prompt=prompt,
-            number_of_images=1,
-            aspect_ratio=aspect_ratio,
-            safety_filter_level="block_some",
-            person_generation="allow_adult"
-        )
+    async def generate_image(self, prompt: str, aspect_ratio: str = "1:1") -> bytes:
+        # Generate image using Gemini 3 Pro Image
+        # Based on documentation: Output is "Text and image"
         
-        # Save to a temporary URL or upload to Cloud Storage
-        # Since we can't return bytes directly as URL to Telegram easily without saving,
-        # we will return the first image object, and handler will handle bytes.
-        # But for this interface we need to change return type or logic.
+        response = await self.image_model.generate_content_async(prompt)
         
-        # Important: Imagen API returns Image object which has ._image_bytes or .save()
-        # To make it compatible with current handler which expects URL:
-        # 1. Upload to GCS (Best practice)
-        # 2. Return bytes and change handler (Easier for MVP)
-        
-        # Let's change this method to return bytes, and update handler.
-        return images[0]._image_bytes
+        # Extract image from response parts
+        # Gemini usually returns parts. We need to find the one with inline_data (image)
+        for part in response.candidates[0].content.parts:
+            # Check for inline data (image bytes)
+            if hasattr(part, 'inline_data') and part.inline_data:
+                 return part.inline_data.data
+            
+            # Or maybe it's accessible differently in the SDK version
+            # Usually part.inline_data.data is correct for python-vertexai
+            
+        # If no image found, raise error
+        raise ValueError("No image generated in response. The model might have refused or returned only text.")
 
-    async def edit_image(self, image_bytes: bytes, prompt: str) -> str:
-        # Placeholder for image editing
-        return "https://via.placeholder.com/1024"
+    async def edit_image(self, image_bytes: bytes, prompt: str) -> bytes:
+        # Edit image using Gemini 3 Pro Image
+        # Input: Text + Image
+        
+        image_part = Part.from_data(data=image_bytes, mime_type="image/png")
+        
+        response = await self.image_model.generate_content_async([prompt, image_part])
+        
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'inline_data') and part.inline_data:
+                return part.inline_data.data
+        
+        raise ValueError("No edited image generated in response")
 
 vertex_service = VertexAIService()
