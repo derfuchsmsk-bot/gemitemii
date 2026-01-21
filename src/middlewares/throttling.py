@@ -19,6 +19,15 @@ class RateLimitMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        # Check if event is a CallbackQuery (buttons) - do not throttle these
+        # as rapid button clicks are common and should be handled gracefully
+        # or let the handler deal with concurrency.
+        try:
+            if hasattr(event, 'callback_query') or 'callback_query' in str(event):
+                return await handler(event, data)
+        except:
+            pass
+            
         user: User = data.get("event_from_user")
         
         if user:
@@ -28,7 +37,7 @@ class RateLimitMiddleware(BaseMiddleware):
             if user_id in self.last_user_time:
                 elapsed = current_time - self.last_user_time[user_id]
                 if elapsed < self.limit:
-                    # Too fast!
+                    # Too fast! Silent ignore (standard Telegram bot behavior)
                     return
             
             self.last_user_time[user_id] = current_time

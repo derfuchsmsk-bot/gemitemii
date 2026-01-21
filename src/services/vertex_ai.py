@@ -43,15 +43,18 @@ class VertexAIService:
                 return await func(*args, **kwargs)
             except Exception as e:
                 error_str = str(e)
+                logger.error(f"Attempt {attempt+1} failed: {error_str}")
                 # Check for Quota/Resource Exhausted errors
-                if "429" in error_str or "Resource exhausted" in error_str:
+                if "429" in error_str or "Resource exhausted" in error_str or "exhausted" in error_str:
                     if attempt == max_retries - 1:
+                        logger.error("Max retries reached for rate limit.")
                         raise e
                     
                     delay = base_delay * (2 ** attempt) # Exponential backoff: 2, 4, 8
-                    logger.warning(f"Got 429, retrying in {delay}s... (Attempt {attempt+1}/{max_retries})")
+                    logger.warning(f"Got 429/Quota, retrying in {delay}s... (Attempt {attempt+1}/{max_retries})")
                     await asyncio.sleep(delay)
                 else:
+                    # Non-retryable error
                     raise e
 
     async def generate_text(self, prompt: str, history: list = None, model_type: str = "flash") -> str:
@@ -73,26 +76,37 @@ class VertexAIService:
             f"Action: 1. Create a detailed prompt in English for this image. 2. GENERATE the image."
         )
         
+        logger.info(f"Generating image with AR: {aspect_ratio}")
+        
         async def _call():
-            # Increase timeout for Gemini 3 Image generation
-            response = await asyncio.wait_for(self.image_model.generate_content_async(full_prompt), timeout=180.0)
+            # Increased timeout significantly for image generation (can take 3-5 mins on cold start)
+            response = await asyncio.wait_for(self.image_model.generate_content_async(full_prompt), timeout=300.0)
             
             image_bytes = None
             text_response = ""
 
-            if response.candidates and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    try:
-                        if part.text:
-                            text_response += part.text + "\n"
-                    except:
-                        pass
-                    
-                    if hasattr(part, 'inline_data') and part.inline_data:
-                         image_bytes = part.inline_data.data
+            if response.candidates and len(response.candidates) > 0:
+                candidate = response.candidates[0]
+                if candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        try:
+                            if hasattr(part, 'text') and part.text:
+                                text_response += part.text + "\n"
+                        except Exception:
+                            pass
+                        
+                        # Handle inline_data (images)
+                        # Try both 'inline_data' attribute and checking mime_type
+                        if hasattr(part, 'inline_data') and part.inline_data:
+                             image_bytes = part.inline_data.data
+                             break
+            else:
+                logger.warning("No candidates in response")
 
             if not image_bytes:
-                raise ValueError(f"No image generated. Model said: {text_response}")
+                error_msg = f"No image generated. Model response: {text_response[:500]}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
                 
             return image_bytes, text_response.strip()
 

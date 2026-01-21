@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # Telegram
     BOT_TOKEN: str
     WEBHOOK_URL: str | None = None
+    TELEGRAM_SECRET: str | None = os.getenv("TELEGRAM_SECRET")
     
     # Google Cloud
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None

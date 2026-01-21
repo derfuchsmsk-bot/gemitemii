@@ -7,6 +7,7 @@ from src.handlers import common, chat, image_gen, settings as settings_handler
 from src.middlewares.throttling import RateLimitMiddleware
 from aiogram.fsm.storage.memory import MemoryStorage
 from starlette.status import HTTP_403_FORBIDDEN
+from contextlib import asynccontextmanager
 import asyncio
 import os
 
@@ -14,7 +15,31 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        webhook_url = settings.WEBHOOK_URL
+        if webhook_url:
+            # Ensure /webhook suffix
+            if not webhook_url.endswith("/webhook"):
+                webhook_url = f"{webhook_url.rstrip('/')}/webhook"
+                settings.WEBHOOK_URL = webhook_url
+
+            logger.info(f"Setting webhook to {webhook_url}")
+            # Always set webhook on startup to be sure, and clear any old secret tokens
+            await bot.set_webhook(
+                url=webhook_url,
+                drop_pending_updates=True,
+                secret_token=settings.TELEGRAM_SECRET
+            )
+        else:
+            logger.warning("WEBHOOK_URL is not set.")
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+    
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 # Initialize Bot and Dispatcher here for Webhook
 bot = Bot(token=settings.BOT_TOKEN)
@@ -29,30 +54,16 @@ dp.include_router(settings_handler.router)
 dp.include_router(image_gen.router)
 dp.include_router(chat.router)
 
-@app.on_event("startup")
-async def on_startup():
-    try:
-        webhook_url = settings.WEBHOOK_URL
-        if not webhook_url:
-            logger.warning("WEBHOOK_URL is not set.")
-            return
-
-        # Ensure /webhook suffix
-        if not webhook_url.endswith("/webhook"):
-            webhook_url = f"{webhook_url.rstrip('/')}/webhook"
-            settings.WEBHOOK_URL = webhook_url
-
-        logger.info(f"Setting webhook to {webhook_url}")
-        # Always set webhook on startup to be sure, and clear any old secret tokens
-        await bot.set_webhook(
-            url=webhook_url,
-            drop_pending_updates=True
-        )
-    except Exception as e:
-        logger.error(f"Startup error: {e}")
-
 @app.post("/webhook")
-async def webhook(update: dict, background_tasks: BackgroundTasks):
+async def webhook(
+    update: dict, 
+    background_tasks: BackgroundTasks,
+    x_telegram_bot_api_secret_token: str = Header(None)
+):
+    if settings.TELEGRAM_SECRET and x_telegram_bot_api_secret_token != settings.TELEGRAM_SECRET:
+        logger.warning("Unauthorized webhook request")
+        raise HTTPException(status_code=HTTP_403_FORBIDDEN, detail="Forbidden")
+
     telegram_update = types.Update(**update)
     background_tasks.add_task(dp.feed_update, bot, telegram_update)
     return {"ok": True}
