@@ -7,12 +7,12 @@ router = Router()
 
 @router.message(F.text == "⚙️ Настройки")
 async def settings_menu(message: Message):
-    settings = get_user_settings(message.from_user.id)
+    user_settings = get_user_settings(message.from_user.id)
     text = (
         "⚙️ **Настройки бота**\n\n"
-        f"🧠 Модель: {settings.get('model', 'Auto')}\n"
-        f"📐 Соотношение сторон: {settings.get('aspect_ratio')}\n"
-        f"🎨 Стиль: {settings.get('style')}"
+        f"🧠 Модель: {user_settings.get('model', 'Auto')}\n"
+        f"📐 Соотношение сторон: {user_settings.get('aspect_ratio')}\n"
+        f"🎨 Стиль: {user_settings.get('style')}"
     )
     await message.answer(text, reply_markup=get_settings_keyboard())
 
@@ -42,12 +42,12 @@ async def setting_callback(callback: CallbackQuery):
         return
     
     # Refresh message text to show new settings
-    settings = get_user_settings(user_id)
+    user_settings = get_user_settings(user_id)
     text = (
         "⚙️ **Настройки бота**\n\n"
-        f"🧠 Модель: {settings.get('model', 'Auto')}\n"
-        f"📐 Соотношение сторон: {settings.get('aspect_ratio')}\n"
-        f"🎨 Стиль: {settings.get('style')}"
+        f"🧠 Модель: {user_settings.get('model', 'Auto')}\n"
+        f"📐 Соотношение сторон: {user_settings.get('aspect_ratio')}\n"
+        f"🎨 Стиль: {user_settings.get('style')}"
     )
     
     await callback.message.edit_text(text, reply_markup=get_settings_keyboard())

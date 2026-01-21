@@ -51,5 +51,5 @@ async def clear_context(callback: CallbackQuery):
     ref = get_context_ref(user_id)
     if ref:
         ref.delete()
-    await callback.message.answer("🗑 Контекст очищен!")
+    await callback.message.edit_text("🗑 Контекст очищен!")
     await callback.answer()
