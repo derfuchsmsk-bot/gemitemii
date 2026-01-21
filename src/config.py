@@ -6,13 +6,13 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     # Telegram
-    BOT_TOKEN: str
+    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
     WEBHOOK_URL: str | None = None
     TELEGRAM_SECRET: str | None = os.getenv("TELEGRAM_SECRET")
     
     # Google Cloud
     GOOGLE_APPLICATION_CREDENTIALS: str | None = None
-    PROJECT_ID: str
+    PROJECT_ID: str = os.getenv("PROJECT_ID", "")
     GCS_BUCKET_NAME: str | None = os.getenv("GCS_BUCKET_NAME")
     REGION: str = os.getenv("REGION", "global")
     

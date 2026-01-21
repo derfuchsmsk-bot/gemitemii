@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     try:
         logger.info("Starting up application...")
+        # Check if project_id is available
+        if not settings.PROJECT_ID:
+            logger.error("PROJECT_ID environment variable is missing!")
+            
         webhook_url = settings.WEBHOOK_URL
         if webhook_url:
             if not webhook_url.endswith("/webhook"):

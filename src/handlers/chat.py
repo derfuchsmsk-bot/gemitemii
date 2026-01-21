@@ -1,8 +1,10 @@
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
+from aiogram.fsm.context import FSMContext
 from src.services.vertex_ai import vertex_service
 from src.keyboards.settings_kbs import get_chat_response_keyboard
 from src.settings_store import db
+from src.states import GenStates
 from vertexai.generative_models import Content, Part
 import logging
 
