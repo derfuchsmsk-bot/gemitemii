@@ -6,6 +6,7 @@ from src.keyboards.settings_kbs import get_image_response_keyboard
 from src.keyboards.image_gen_kbs import get_generation_settings_keyboard
 from src.states import GenStates
 from src.settings_store import get_user_settings, update_user_setting
+from aiogram.exceptions import TelegramBadRequest
 import logging
 
 logger = logging.getLogger(__name__)
@@ -63,11 +64,13 @@ async def quick_settings_callback(callback: CallbackQuery, state: FSMContext):
         await callback.message.edit_reply_markup(
             reply_markup=get_generation_settings_keyboard(ar, style, magic, res)
         )
-    except Exception as e:
+    except TelegramBadRequest as e:
         if "message is not modified" in str(e).lower():
-            pass # Ignore if keyboard hasn't changed
+            pass
         else:
-            logger.error(f"Settings callback error: {e}", exc_info=True)
+            logger.error(f"Telegram error: {e}")
+    except Exception as e:
+        logger.error(f"Settings callback error: {e}", exc_info=True)
         
     await callback.answer()
 
