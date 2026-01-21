@@ -25,11 +25,11 @@ class Settings(BaseSettings):
         env_file_encoding = "utf-8"
         extra = "ignore"
 
-    @property
+        @property
     def is_production(self) -> bool:
         return os.getenv("K_SERVICE") is not None
 
-        def validate(self):
+    def validate(self):
         # We don't raise here anymore to prevent startup crash
         if not self.BOT_TOKEN:
             logger.warning("BOT_TOKEN is not set. Bot will not function.")
