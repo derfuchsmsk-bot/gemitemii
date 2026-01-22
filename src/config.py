@@ -42,7 +42,6 @@ class Settings(BaseSettings):
     def validate(self):
         """
         Проверка обязательных параметров. 
-        Выводит предупреждения вместо исключений, чтобы избежать падения при запуске.
         """
         if not self.BOT_TOKEN:
             logger.warning("⚠️  BOT_TOKEN не установлен. Бот не сможет подключиться к Telegram.")
