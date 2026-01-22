@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     
     # App
     PORT: int = int(os.getenv("PORT", "8080"))
-    HOST: str = "0.0.0.0"
+        HOST: str = "0.0.0.0"
 
-        class Config:
+    class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"

@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
         if not settings.PROJECT_ID:
             logger.error("PROJECT_ID environment variable is missing!")
             
+        webhook_url = settings.WEBHOOK_URL
         if webhook_url and bot:
             if not webhook_url.endswith("/webhook"):
                 webhook_url = f"{webhook_url.rstrip('/')}/webhook"
