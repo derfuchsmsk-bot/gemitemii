@@ -1,44 +1,58 @@
 import os
 import logging
-from pydantic_settings import BaseSettings
+from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Настройка логирования
 logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
+    """
+    Настройки приложения. 
+    Pydantic автоматически ищет переменные окружения с именами, совпадающими с полями класса.
+    """
+    
     # Telegram
-    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
-    WEBHOOK_URL: str | None = None
-    TELEGRAM_SECRET: str | None = os.getenv("TELEGRAM_SECRET")
+    BOT_TOKEN: str = ""
+    WEBHOOK_URL: Optional[str] = None
+    TELEGRAM_SECRET: Optional[str] = None
     
     # Google Cloud
-    GOOGLE_APPLICATION_CREDENTIALS: str | None = None
-    PROJECT_ID: str = os.getenv("PROJECT_ID", "")
-    GCS_BUCKET_NAME: str | None = os.getenv("GCS_BUCKET_NAME")
-    REGION: str = os.getenv("REGION", "global")
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = None
+    PROJECT_ID: str = ""
+    GCS_BUCKET_NAME: Optional[str] = None
+    REGION: str = "global"
     
-    # App
-    PORT: int = int(os.getenv("PORT", "8080"))
-        HOST: str = "0.0.0.0"
+    # App / Server
+    PORT: int = 8080
+    HOST: str = "0.0.0.0"
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        extra = "ignore"
+    # Конфигурация Pydantic
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
     @property
     def is_production(self) -> bool:
+        """Определяет, запущено ли приложение в облаке (Google Cloud Run)."""
         return os.getenv("K_SERVICE") is not None
 
     def validate(self):
-        # We don't raise here anymore to prevent startup crash
+        """
+        Проверка обязательных параметров. 
+        Выводит предупреждения вместо исключений, чтобы избежать падения при запуске.
+        """
         if not self.BOT_TOKEN:
-            logger.warning("BOT_TOKEN is not set. Bot will not function.")
+            logger.warning("⚠️  BOT_TOKEN не установлен. Бот не сможет подключиться к Telegram.")
         
         if not self.PROJECT_ID:
-            logger.warning("PROJECT_ID is not set. Firestore and Vertex AI will fail.")
+            logger.warning("⚠️  PROJECT_ID не установлен. Firestore и Vertex AI могут не работать.")
         
         if self.is_production and not self.WEBHOOK_URL:
-            logger.warning("WEBHOOK_URL is not set in production. Bot will not receive updates.")
+            logger.warning("⚠️  WEBHOOK_URL не задан в режиме production. Бот не сможет получать обновления.")
 
+# Инициализация настроек
 settings = Settings()
 settings.validate()
